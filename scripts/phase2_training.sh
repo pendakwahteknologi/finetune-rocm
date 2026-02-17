@@ -20,10 +20,12 @@ USE_FP16_DEFAULT="${USE_FP16:-1}"
 USE_BF16_DEFAULT="${USE_BF16:-0}"
 DATALOADER_WORKERS_DEFAULT="${DATALOADER_WORKERS:-0}"
 OUT_DIR_DEFAULT="${OUT_DIR:-/workspace/models/lora_simple_rocm_out}"
-SEQ_LEN_DEFAULT="${SEQ_LEN:-384}"
+SEQ_LEN_DEFAULT="${SEQ_LEN:-256}"
 ATTN_IMPL_DEFAULT="${ATTN_IMPL:-eager}"
 GRADIENT_CHECKPOINTING_DEFAULT="${GRADIENT_CHECKPOINTING:-1}"
 PYTORCH_ALLOC_CONF_DEFAULT="${PYTORCH_ALLOC_CONF:-${PYTORCH_HIP_ALLOC_CONF:-max_split_size_mb:64,garbage_collection_threshold:0.7}}"
+OPTIMIZER_DEFAULT="${OPTIMIZER:-adamw_hf}"
+DATALOADER_PIN_MEMORY_DEFAULT="${DATALOADER_PIN_MEMORY:-0}"
 
 MODE="foreground"
 FULL_RUN="0"
@@ -151,7 +153,7 @@ if [ "$FULL_RUN" = "1" ]; then
   MAX_TRAIN_ROWS_RUN="${MAX_TRAIN_ROWS_FULL:-20011}"
   OUT_DIR_RUN="${OUT_DIR_FULL:-/workspace/models/lora_full_20k_rocm_out}"
   if [ -z "${SEQ_LEN:-}" ]; then
-    SEQ_LEN_RUN="256"
+    SEQ_LEN_RUN="192"
   fi
 fi
 
@@ -175,6 +177,8 @@ export SEQ_LEN=${SEQ_LEN_RUN}
 export DATALOADER_WORKERS=${DATALOADER_WORKERS_DEFAULT}
 export ATTN_IMPL=${ATTN_IMPL_DEFAULT}
 export GRADIENT_CHECKPOINTING=${GRADIENT_CHECKPOINTING_DEFAULT}
+export OPTIMIZER=${OPTIMIZER_DEFAULT}
+export DATALOADER_PIN_MEMORY=${DATALOADER_PIN_MEMORY_DEFAULT}
 export BASE_DIR=/workspace
 export DATA_DIR=/workspace/data
 export OUT_DIR=${OUT_DIR_RUN}
@@ -217,6 +221,8 @@ USE_FP16 = os.environ.get("USE_FP16", "1") == "1"
 USE_BF16 = os.environ.get("USE_BF16", "0") == "1"
 ATTN_IMPL = os.environ.get("ATTN_IMPL", "eager")
 GRADIENT_CHECKPOINTING = os.environ.get("GRADIENT_CHECKPOINTING", "1") == "1"
+OPTIMIZER = os.environ.get("OPTIMIZER", "adamw_hf")
+DATALOADER_PIN_MEMORY = os.environ.get("DATALOADER_PIN_MEMORY", "0") == "1"
 
 LORA_R = int(os.environ.get("LORA_R", "8"))
 LORA_ALPHA = int(os.environ.get("LORA_ALPHA", "16"))
@@ -290,9 +296,11 @@ args = TrainingArguments(
     report_to=[],
     fp16=USE_FP16,
     bf16=USE_BF16,
+    optim=OPTIMIZER,
     gradient_checkpointing=GRADIENT_CHECKPOINTING,
     remove_unused_columns=False,
     dataloader_num_workers=0,
+    dataloader_pin_memory=DATALOADER_PIN_MEMORY,
 )
 
 trainer = Trainer(
@@ -325,6 +333,7 @@ if [ "$MODE" = "background" ]; then
   out "  ${WHITE}${BOLD}Rows${RESET}       $MAX_TRAIN_ROWS_RUN"
   out "  ${WHITE}${BOLD}Seq Len${RESET}    $SEQ_LEN_RUN"
   out "  ${WHITE}${BOLD}Attn Impl${RESET}  $ATTN_IMPL_DEFAULT"
+  out "  ${WHITE}${BOLD}Optim${RESET}      $OPTIMIZER_DEFAULT"
   out "  ${WHITE}${BOLD}Output${RESET}     $OUT_DIR_RUN"
   echo ""
 
@@ -356,6 +365,7 @@ banner "Phase 2: Start Training (Interactive)"
 out "  ${WHITE}${BOLD}Rows${RESET}    $MAX_TRAIN_ROWS_RUN"
 out "  ${WHITE}${BOLD}Seq Len${RESET}  $SEQ_LEN_RUN"
 out "  ${WHITE}${BOLD}Attn${RESET}    $ATTN_IMPL_DEFAULT"
+out "  ${WHITE}${BOLD}Optim${RESET}   $OPTIMIZER_DEFAULT"
 out "  ${WHITE}${BOLD}Output${RESET}  $OUT_DIR_RUN"
 
 docker run -it --rm \
