@@ -582,6 +582,22 @@ cmake -S . -B build
 cmake --build build -j"$(nproc)"
 ```
 
+### `llama-quantize: error while loading shared libraries: libllama.so.0`
+1. This only affects quantization. Your `model-f16.gguf` is still usable.
+2. Rebuild llama.cpp:
+
+```bash
+cd "$LLAMA_CPP_DIR"
+cmake -S . -B build
+cmake --build build -j"$(nproc)"
+```
+
+3. Re-run quantization via Phase 4:
+
+```bash
+./scripts/start_finetuning_process.sh gguf
+```
+
 ### `mkdir: cannot create directory 'models/gguf': Permission denied`
 1. This is usually ownership drift from Docker-created files.
 2. From repo root, fix ownership:

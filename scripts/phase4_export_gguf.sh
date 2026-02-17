@@ -256,7 +256,33 @@ fi
 
 QUANTIZED_GGUF_HOST="$GGUF_OUT_DIR_HOST/model-${QUANTIZE_TYPE}.gguf"
 step 3 3 "Quantizing GGUF -> $QUANTIZE_TYPE"
-"$QUANTIZE_BIN" "$F16_GGUF_HOST" "$QUANTIZED_GGUF_HOST" "$QUANTIZE_TYPE"
+LLAMA_LD_PATHS=()
+for d in "$LLAMA_CPP_DIR/build/bin" "$LLAMA_CPP_DIR/build/lib" "$LLAMA_CPP_DIR/build/src"; do
+  if [ -d "$d" ]; then
+    LLAMA_LD_PATHS+=("$d")
+  fi
+done
+LLAMA_LD_PATH=""
+if [ "${#LLAMA_LD_PATHS[@]}" -gt 0 ]; then
+  LLAMA_LD_PATH="$(IFS=:; echo "${LLAMA_LD_PATHS[*]}")"
+  kv "LD_LIBRARY_PATH" "$LLAMA_LD_PATH"
+fi
+
+if [ -n "$LLAMA_LD_PATH" ]; then
+  if ! env LD_LIBRARY_PATH="${LLAMA_LD_PATH}:${LD_LIBRARY_PATH:-}" "$QUANTIZE_BIN" "$F16_GGUF_HOST" "$QUANTIZED_GGUF_HOST" "$QUANTIZE_TYPE"; then
+    status_warn "Quantization failed; keeping unquantized GGUF."
+    tip "If you see libllama.so errors, rebuild llama.cpp and retry."
+    kv "GGUF f16" "$F16_GGUF_HOST"
+    exit 0
+  fi
+else
+  if ! "$QUANTIZE_BIN" "$F16_GGUF_HOST" "$QUANTIZED_GGUF_HOST" "$QUANTIZE_TYPE"; then
+    status_warn "Quantization failed; keeping unquantized GGUF."
+    tip "Rebuild llama.cpp and ensure runtime libraries are resolvable."
+    kv "GGUF f16" "$F16_GGUF_HOST"
+    exit 0
+  fi
+fi
 
 echo ""
 status_ok "GGUF export complete"
