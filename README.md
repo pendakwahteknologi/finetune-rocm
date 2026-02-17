@@ -616,6 +616,21 @@ sudo chown -R "$USER":"$USER" .
 1. Run Phase 4 first.
 2. Or set `MODEL_GGUF` to an existing GGUF path.
 
+### `llama-cli: error while loading shared libraries ...`
+1. Rebuild llama.cpp:
+
+```bash
+cd "$LLAMA_CPP_DIR"
+cmake -S . -B build
+cmake --build build -j"$(nproc)"
+```
+
+2. Re-run Phase 5:
+
+```bash
+./scripts/start_finetuning_process.sh chat
+```
+
 ### Container time is wrong
 1. Check active setting: `echo "$CONTAINER_TZ"`.
 2. Set it explicitly (example): `export CONTAINER_TZ="Asia/Kuala_Lumpur"`.

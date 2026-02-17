@@ -45,6 +45,30 @@ else
   exit 1
 fi
 
+LLAMA_LD_PATHS=()
+for d in "$LLAMA_CPP_DIR/build/bin" "$LLAMA_CPP_DIR/build/lib" "$LLAMA_CPP_DIR/build/src" "$LLAMA_CPP_DIR/build/common"; do
+  if [ -d "$d" ]; then
+    LLAMA_LD_PATHS+=("$d")
+  fi
+done
+if [ "${#LLAMA_LD_PATHS[@]}" -gt 0 ]; then
+  LLAMA_LD_PATH="$(IFS=:; echo "${LLAMA_LD_PATHS[*]}")"
+  export LD_LIBRARY_PATH="${LLAMA_LD_PATH}:${LD_LIBRARY_PATH:-}"
+else
+  LLAMA_LD_PATH=""
+fi
+
+if command -v ldd >/dev/null 2>&1; then
+  MISSING_LIBS="$(ldd "$BIN" 2>/dev/null | awk '/not found/{print $1}' | tr '\n' ' ' | sed 's/[[:space:]]*$//')"
+  if [ -n "$MISSING_LIBS" ]; then
+    status_err "llama.cpp runtime libraries are missing."
+    kv "Missing libs" "$MISSING_LIBS"
+    tip "Rebuild llama.cpp: cmake -S . -B build && cmake --build build -j\"$(nproc)\""
+    tip "Or set LLAMA_CPP_DIR to a valid llama.cpp build."
+    exit 1
+  fi
+fi
+
 banner "Phase 5: Chat with Fine-Tuned Model (llama.cpp)"
 kv "Binary" "$BIN"
 kv "Model" "$MODEL_GGUF"
@@ -53,6 +77,9 @@ kv "GPU layers" "$N_GPU_LAYERS"
 kv "Threads" "$THREADS"
 kv "Temperature" "$TEMP"
 kv "Top-p" "$TOP_P"
+if [ -n "$LLAMA_LD_PATH" ]; then
+  kv "LD path" "$LLAMA_LD_PATH"
+fi
 echo ""
 tip "Type your prompt and press Enter. Press Ctrl+C to quit."
 echo ""
