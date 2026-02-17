@@ -77,6 +77,7 @@ docker run --rm \
 import json
 import os
 import time
+import gc
 from pathlib import Path
 
 import torch
@@ -134,22 +135,14 @@ def gen(model, tok, prompt):
 
 print("Loading base model...")
 base_tok = AutoTokenizer.from_pretrained(BASE_MODEL, token=HF_TOKEN)
+if base_tok.pad_token is None:
+    base_tok.pad_token = base_tok.eos_token
 base_model = AutoModelForCausalLM.from_pretrained(
     BASE_MODEL,
     dtype=torch.float16,
     device_map="auto",
     token=HF_TOKEN,
 )
-
-print("Loading fine-tuned model...")
-ft_base = AutoModelForCausalLM.from_pretrained(
-    BASE_MODEL,
-    dtype=torch.float16,
-    token=HF_TOKEN,
-)
-ft_base = ft_base.to(torch.device("cuda" if torch.cuda.is_available() else "cpu"))
-ft_tok = AutoTokenizer.from_pretrained(LORA_ADAPTER)
-ft_model = PeftModel.from_pretrained(ft_base, LORA_ADAPTER)
 
 results = {
     "metadata": {
@@ -164,12 +157,37 @@ results = {
     "comparisons": [],
 }
 
+base_runs = []
 for i, prompt in enumerate(PROMPTS, start=1):
-    print(f"[{i}/{len(PROMPTS)}] {prompt}")
+    print(f"[base {i}/{len(PROMPTS)}] {prompt}")
     b1 = gen(base_model, base_tok, prompt)
     b2 = gen(base_model, base_tok, prompt)
+    base_runs.append((b1, b2))
+
+print("Releasing base model from memory...")
+del base_model
+del base_tok
+gc.collect()
+if torch.cuda.is_available():
+    torch.cuda.empty_cache()
+
+print("Loading fine tuned model...")
+ft_base = AutoModelForCausalLM.from_pretrained(
+    BASE_MODEL,
+    dtype=torch.float16,
+    device_map="auto",
+    token=HF_TOKEN,
+)
+ft_tok = AutoTokenizer.from_pretrained(LORA_ADAPTER)
+if ft_tok.pad_token is None:
+    ft_tok.pad_token = ft_tok.eos_token
+ft_model = PeftModel.from_pretrained(ft_base, LORA_ADAPTER)
+
+for i, prompt in enumerate(PROMPTS, start=1):
+    print(f"[fine tuned {i}/{len(PROMPTS)}] {prompt}")
     f1 = gen(ft_model, ft_tok, prompt)
     f2 = gen(ft_model, ft_tok, prompt)
+    b1, b2 = base_runs[i - 1]
 
     results["comparisons"].append({
         "id": i,
