@@ -13,6 +13,7 @@ OPENORCA_N="${OPENORCA_N:-5000}"
 EVAL_N="${EVAL_N:-200}"
 SEED="${SEED:-42}"
 SYSTEM_PROMPT="${SYSTEM_PROMPT:-You are a helpful assistant.}"
+HF_TOKEN="${HF_TOKEN:-${HUGGINGFACE_HUB_TOKEN:-}}"
 
 if ! command -v docker >/dev/null 2>&1; then
   status_err "Docker is required but not found in PATH."
@@ -46,6 +47,8 @@ docker run --rm \
   -e EVAL_N="$EVAL_N" \
   -e SEED="$SEED" \
   -e SYSTEM_PROMPT="$SYSTEM_PROMPT" \
+  -e HF_TOKEN="$HF_TOKEN" \
+  -e HUGGINGFACE_HUB_TOKEN="$HF_TOKEN" \
   "$IMAGE_NAME" python /workspace/scripts/phase1_prepare_data.py
 
 if [ ! -f "data/train_chatml.jsonl" ]; then
