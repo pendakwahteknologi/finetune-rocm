@@ -566,6 +566,22 @@ Phase 2 uses `meta-llama/Meta-Llama-3.1-8B-Instruct` by default inside the embed
 1. Set `LLAMA_CPP_DIR` correctly.
 2. Ensure llama.cpp repository is present and built.
 
+### `ValueError: Failed to detect model architecture` during GGUF conversion
+1. Re-run Phase 4 with clean merged output:
+
+```bash
+CLEAN_MERGED_DIR=1 ./scripts/start_finetuning_process.sh gguf
+```
+
+2. Ensure `llama.cpp` is up to date and rebuilt:
+
+```bash
+cd "$LLAMA_CPP_DIR"
+git pull
+cmake -S . -B build
+cmake --build build -j"$(nproc)"
+```
+
 ### `mkdir: cannot create directory 'models/gguf': Permission denied`
 1. This is usually ownership drift from Docker-created files.
 2. From repo root, fix ownership:

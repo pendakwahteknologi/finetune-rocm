@@ -19,6 +19,7 @@ IMAGE_NAME="${IMAGE_NAME:-finetune-rocm:ready}"
 HF_CACHE_DIR="${HF_CACHE_DIR:-$ROOT_DIR/.cache/huggingface}"
 CONTAINER_TZ="${CONTAINER_TZ:-Asia/Kuala_Lumpur}"
 MERGE_DEVICE_MAP="${MERGE_DEVICE_MAP:-auto}"
+CLEAN_MERGED_DIR="${CLEAN_MERGED_DIR:-1}"
 
 TZ_DOCKER_ARGS=(-e "TZ=$CONTAINER_TZ")
 if [ -f "/usr/share/zoneinfo/$CONTAINER_TZ" ]; then
@@ -115,6 +116,14 @@ banner "Phase 4: Export Merged GGUF"
 out "  ${WHITE}${BOLD}Image${RESET}   $IMAGE_NAME"
 out "  ${WHITE}${BOLD}TZ${RESET}      $CONTAINER_TZ"
 out "  ${WHITE}${BOLD}Merge Map${RESET}  $MERGE_DEVICE_MAP"
+out "  ${WHITE}${BOLD}Clean Merge${RESET}  $CLEAN_MERGED_DIR"
+echo ""
+
+if [ "$CLEAN_MERGED_DIR" = "1" ]; then
+  out "  ${YELLOW}Cleaning previous merged output${RESET}  $MERGED_DIR_HOST"
+  rm -rf "$MERGED_DIR_HOST"
+  mkdir -p "$MERGED_DIR_HOST"
+fi
 echo ""
 
 out "  ${YELLOW}[1/3] Merging LoRA adapter into base model${RESET}"
@@ -179,6 +188,17 @@ model = PeftModel.from_pretrained(base_model, lora_adapter)
 print("Merging adapter into base model...")
 merged = model.merge_and_unload()
 
+# Keep config metadata aligned with the original base architecture so
+# convert_hf_to_gguf can detect the model family reliably.
+base_model_type = getattr(base_model.config, "model_type", None)
+base_architectures = getattr(base_model.config, "architectures", None)
+if base_model_type:
+    merged.config.model_type = base_model_type
+if base_architectures:
+    merged.config.architectures = list(base_architectures)
+elif not getattr(merged.config, "architectures", None):
+    merged.config.architectures = ["LlamaForCausalLM"]
+
 print(f"Saving merged model to: {merged_dir}")
 merged.save_pretrained(str(merged_dir), safe_serialization=True)
 
@@ -186,12 +206,19 @@ tokenizer_src = lora_adapter if Path(lora_adapter).exists() else base_model_name
 tokenizer = AutoTokenizer.from_pretrained(tokenizer_src, token=hf_token)
 tokenizer.save_pretrained(str(merged_dir))
 
+print(f"Saved config model_type: {getattr(merged.config, 'model_type', 'unknown')}")
+print(f"Saved config architectures: {getattr(merged.config, 'architectures', [])}")
 print("Merge complete.")
 PYEOF
 
 F16_GGUF_HOST="$GGUF_OUT_DIR_HOST/model-${GGUF_OUTTYPE}.gguf"
 F16_GGUF_CONTAINER="$GGUF_OUT_DIR_CONTAINER/model-${GGUF_OUTTYPE}.gguf"
 out "  ${YELLOW}[2/3] Converting merged model to GGUF${RESET}  $F16_GGUF_HOST"
+if [ ! -f "$MERGED_DIR_HOST/config.json" ]; then
+  status_err "Missing merged config: $MERGED_DIR_HOST/config.json"
+  out "  Merge step did not produce a valid HF model directory."
+  exit 1
+fi
 docker run --rm \
   "${TZ_DOCKER_ARGS[@]}" \
   --user "$(id -u):$(id -g)" \
