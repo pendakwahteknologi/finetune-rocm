@@ -16,6 +16,17 @@ SKIP_QUANTIZE="${SKIP_QUANTIZE:-0}"
 LLAMA_CPP_DIR="${LLAMA_CPP_DIR:-$ROOT_DIR/llama.cpp}"
 HF_TOKEN="${HF_TOKEN:-${HUGGINGFACE_HUB_TOKEN:-}}"
 
+if command -v python >/dev/null 2>&1; then
+  PYTHON_BIN="python"
+elif command -v python3 >/dev/null 2>&1; then
+  PYTHON_BIN="python3"
+else
+  status_err "Python interpreter not found (python/python3)."
+  out "  Install Python 3, then re-run phase 4:"
+  out "    sudo apt update && sudo apt install -y python3 python3-pip"
+  exit 1
+fi
+
 if ! command -v docker >/dev/null 2>&1; then
   status_err "Docker is required but not found in PATH."
   out "  Install Docker, then re-run phase 4."
@@ -51,12 +62,14 @@ for dir in "$MERGED_DIR" "$GGUF_OUT_DIR"; do
 done
 
 banner "Phase 4: Export Merged GGUF"
+out "  ${WHITE}${BOLD}Python${RESET}  $PYTHON_BIN"
+echo ""
 
 out "  ${YELLOW}[1/3] Merging LoRA adapter into base model${RESET}"
 BASE_MODEL="$BASE_MODEL" \
 LORA_ADAPTER="$LORA_ADAPTER" \
 MERGED_DIR="$MERGED_DIR" \
-python - <<'PYEOF'
+"$PYTHON_BIN" - <<'PYEOF'
 import os
 from pathlib import Path
 
@@ -108,7 +121,7 @@ PYEOF
 
 F16_GGUF="$GGUF_OUT_DIR/model-${GGUF_OUTTYPE}.gguf"
 out "  ${YELLOW}[2/3] Converting merged model to GGUF${RESET}  $F16_GGUF"
-python "$CONVERT_SCRIPT" "$MERGED_DIR" --outfile "$F16_GGUF" --outtype "$GGUF_OUTTYPE"
+"$PYTHON_BIN" "$CONVERT_SCRIPT" "$MERGED_DIR" --outfile "$F16_GGUF" --outtype "$GGUF_OUTTYPE"
 
 if [ "$SKIP_QUANTIZE" = "1" ]; then
   status_warn "SKIP_QUANTIZE=1, skipping quantization"

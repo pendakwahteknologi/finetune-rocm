@@ -568,6 +568,20 @@ Phase 2 uses `meta-llama/Meta-Llama-3.1-8B-Instruct` by default inside the embed
 1. Set `LLAMA_CPP_DIR` correctly.
 2. Ensure llama.cpp repository is present and built.
 
+### `./scripts/phase4_export_gguf.sh: line ...: python: command not found`
+1. Install Python 3:
+
+```bash
+sudo apt update
+sudo apt install -y python3 python3-pip
+```
+
+2. Re-run:
+
+```bash
+./scripts/start_finetuning_process.sh gguf
+```
+
 ### `mkdir: cannot create directory 'models/gguf': Permission denied`
 1. This is usually ownership drift from Docker-created files.
 2. From repo root, fix ownership:

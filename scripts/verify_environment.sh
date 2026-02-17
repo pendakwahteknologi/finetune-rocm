@@ -97,6 +97,14 @@ else
   warn "curl not found; skipped network reachability check"
 fi
 
+if command -v python >/dev/null 2>&1; then
+  pass "Host Python found: python"
+elif command -v python3 >/dev/null 2>&1; then
+  pass "Host Python found: python3"
+else
+  warn "Host Python missing (install python3 + python3-pip before Phase 4)"
+fi
+
 FREE_GB="$(df -Pk "$ROOT_DIR" | awk 'NR==2 {print int($4/1024/1024)}')"
 if [ "${FREE_GB:-0}" -ge "$MIN_FREE_GB" ]; then
   pass "Disk space: ${FREE_GB}GB free (min ${MIN_FREE_GB}GB)"
