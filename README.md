@@ -20,8 +20,8 @@ ROCm pipelines often fail due to host drift (package versions, Python environmen
 2. `scripts/phase2_training.sh`
 3. `scripts/phase3_comparison_report.sh`
 
-Phase 4 and Phase 5 are post-training operations and use local tooling (`python` plus `llama.cpp`). Phase 4 still checks Docker availability as a project guardrail.
-For Phase 0 to Phase 3, scripts also pass timezone settings into `docker run` so logs and timestamps stay consistent.
+Phase 5 is local (`llama.cpp` chat). Phase 4 uses Docker for merge and conversion, then uses local `llama.cpp` quantisation binary if available.
+For Phase 0 to Phase 4, scripts also pass timezone settings into `docker run` so logs and timestamps stay consistent.
 
 ## Official AMD ROCm Docker reference used by this project
 
@@ -137,15 +137,13 @@ Mandatory:
 
 Required for later phases:
 1. `llama.cpp` checkout for Phase 4 conversion and Phase 5 chat.
-2. Local Python dependencies for Phase 4 host-side merge/export.
+2. `llama.cpp` build with `llama-cli` (Phase 5) and optionally `llama-quantize` (Phase 4 quantisation step).
 
-Install local Python requirements (needed by Phase 4):
+Optional local Python dependencies (only if you run custom host-side scripts):
 
 ```bash
-pip install -r requirements.txt
+python3 -m pip install -r requirements.txt
 ```
-
-Install ROCm-compatible PyTorch locally before Phase 4 if not already present.
 
 ## Complete from-zero setup (Ubuntu 24.04.4)
 
@@ -434,10 +432,10 @@ Command:
 ```
 
 Actions:
-1. Loads base model and LoRA adapter.
-2. Merges adapter into base weights.
-3. Converts merged model to GGUF.
-4. Optionally quantises GGUF.
+1. Runs merge and GGUF conversion inside Docker (`finetune-rocm:ready`), so host `torch` is not required.
+2. Loads base model and LoRA adapter, then merges adapter into base weights.
+3. Converts merged model to GGUF via `llama.cpp/convert_hf_to_gguf.py`.
+4. Optionally quantises GGUF using local `llama-quantize` binary if present.
 
 Outputs:
 - `models/merged_llama31_8b_lora/`
@@ -485,7 +483,7 @@ Actions:
 |---|---|---|---|
 | `HF_TOKEN` | unset | phases 0,2,3,4 + verify | HF model access |
 | `HUGGINGFACE_HUB_TOKEN` | unset | phases 0,2,3,4 + verify | Alternate HF token variable |
-| `HF_CACHE_DIR` | `~/.cache/huggingface` | phases 0,1,2,3 | Shared HF cache |
+| `HF_CACHE_DIR` | `~/.cache/huggingface` (phase 4 defaults to `<repo>/.cache/huggingface`) | phases 0,1,2,3,4 | Shared HF cache |
 
 ### Preflight and prelim
 
@@ -493,8 +491,8 @@ Actions:
 |---|---|---|---|
 | `MIN_FREE_GB` | `60` | `verify_environment.sh` | Minimum recommended free disk |
 | `BASE_IMAGE` | `rocm/pytorch:rocm7.2_ubuntu24.04_py3.12_pytorch_release_2.9.1` | `phase0_prelim.sh` | Docker base image (AMD ROCm PyTorch tag) |
-| `IMAGE_NAME` | `finetune-rocm:ready` | phases 0,1,2,3 | Runtime image tag |
-| `CONTAINER_TZ` | `Asia/Kuala_Lumpur` | phases 0,1,2,3 | Container timezone for logs/timestamps |
+| `IMAGE_NAME` | `finetune-rocm:ready` | phases 0,1,2,3,4 | Runtime image tag |
+| `CONTAINER_TZ` | `Asia/Kuala_Lumpur` | phases 0,1,2,3,4 | Container timezone for logs/timestamps |
 | `BASE_MODEL` | Llama 3.1 8B instruct | phases 0,3,4 | Base HF model ID |
 | `FORCE_REBUILD` | `0` | `phase0_prelim.sh` | Force Docker image rebuild |
 | `LLAMA_CPP_DIR` | `<repo>/llama.cpp` | verify, phases 4,5 | llama.cpp root path |
@@ -567,20 +565,6 @@ Phase 2 uses `meta-llama/Meta-Llama-3.1-8B-Instruct` by default inside the embed
 ### `Missing converter: .../convert_hf_to_gguf.py`
 1. Set `LLAMA_CPP_DIR` correctly.
 2. Ensure llama.cpp repository is present and built.
-
-### `./scripts/phase4_export_gguf.sh: line ...: python: command not found`
-1. Install Python 3:
-
-```bash
-sudo apt update
-sudo apt install -y python3 python3-pip
-```
-
-2. Re-run:
-
-```bash
-./scripts/start_finetuning_process.sh gguf
-```
 
 ### `mkdir: cannot create directory 'models/gguf': Permission denied`
 1. This is usually ownership drift from Docker-created files.

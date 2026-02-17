@@ -98,11 +98,11 @@ else
 fi
 
 if command -v python >/dev/null 2>&1; then
-  pass "Host Python found: python"
+  pass "Host Python found: python (optional)"
 elif command -v python3 >/dev/null 2>&1; then
-  pass "Host Python found: python3"
+  pass "Host Python found: python3 (optional)"
 else
-  warn "Host Python missing (install python3 + python3-pip before Phase 4)"
+  warn "Host Python missing (optional unless doing custom host-side tooling)"
 fi
 
 FREE_GB="$(df -Pk "$ROOT_DIR" | awk 'NR==2 {print int($4/1024/1024)}')"
