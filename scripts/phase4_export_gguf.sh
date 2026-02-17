@@ -77,7 +77,7 @@ merged_dir.mkdir(parents=True, exist_ok=True)
 print(f"Loading base model: {base_model_name}")
 base_model = AutoModelForCausalLM.from_pretrained(
     base_model_name,
-    torch_dtype=dtype,
+    dtype=dtype,
     device_map="auto",
     token=hf_token,
 )

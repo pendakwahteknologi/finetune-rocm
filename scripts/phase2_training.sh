@@ -240,7 +240,7 @@ print(f"Loading model: {BASE_MODEL}")
 dtype = torch.bfloat16 if USE_BF16 else (torch.float16 if USE_FP16 else torch.float32)
 model = AutoModelForCausalLM.from_pretrained(
     BASE_MODEL,
-    torch_dtype=dtype,
+    dtype=dtype,
     token=HF_TOKEN,
 )
 model.config.use_cache = False

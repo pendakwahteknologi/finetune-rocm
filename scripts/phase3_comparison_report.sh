@@ -123,7 +123,7 @@ print("Loading base model...")
 base_tok = AutoTokenizer.from_pretrained(BASE_MODEL, token=HF_TOKEN)
 base_model = AutoModelForCausalLM.from_pretrained(
     BASE_MODEL,
-    torch_dtype=torch.float16,
+    dtype=torch.float16,
     device_map="auto",
     token=HF_TOKEN,
 )
@@ -131,7 +131,7 @@ base_model = AutoModelForCausalLM.from_pretrained(
 print("Loading fine-tuned model...")
 ft_base = AutoModelForCausalLM.from_pretrained(
     BASE_MODEL,
-    torch_dtype=torch.float16,
+    dtype=torch.float16,
     token=HF_TOKEN,
 )
 ft_base = ft_base.to(torch.device("cuda" if torch.cuda.is_available() else "cpu"))
