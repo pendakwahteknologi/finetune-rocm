@@ -10,6 +10,7 @@ This project is intentionally phase-based so operators can run, debug, and hand 
 2. Docker-based execution for preparation, training, and comparison.
 3. Early failure for environment issues via preflight checks.
 4. Predictable output locations for data, model artefacts, and reports.
+5. Consistent container timezone across Docker phases (default `Asia/Kuala_Lumpur`).
 
 ## Why Docker is mandatory for fine-tuning phases
 
@@ -20,6 +21,7 @@ ROCm pipelines often fail due to host drift (package versions, Python environmen
 3. `scripts/phase3_comparison_report.sh`
 
 Phase 4 and Phase 5 are post-training operations and use local tooling (`python` plus `llama.cpp`). Phase 4 still checks Docker availability as a project guardrail.
+For Phase 0 to Phase 3, scripts also pass timezone settings into `docker run` so logs and timestamps stay consistent.
 
 ## Why this base model is used
 
@@ -114,6 +116,127 @@ pip install -r requirements.txt
 
 Install ROCm-compatible PyTorch locally before Phase 4 if not already present.
 
+## Complete from-zero setup (Ubuntu 24.04.4)
+
+Follow these commands in order on a brand new server.
+
+### 1) Install base packages
+
+```bash
+sudo apt update
+sudo apt install -y ca-certificates curl gnupg lsb-release git build-essential cmake python3-pip
+```
+
+### 2) Install Docker Engine (official Docker repository)
+
+```bash
+sudo install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+sudo chmod a+r /etc/apt/keyrings/docker.gpg
+
+echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+  $(. /etc/os-release && echo \"$VERSION_CODENAME\") stable" | \
+  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+sudo apt update
+sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+```
+
+Add your user to Docker group and apply it:
+
+```bash
+sudo usermod -aG docker "$USER"
+newgrp docker
+docker --version
+docker info
+```
+
+### 3) Clone this project and fix script permissions
+
+```bash
+cd ~
+git clone https://github.com/pendakwahteknologi/finetune-rocm.git
+cd finetune-rocm
+chmod +x scripts/*.sh
+```
+
+Why `chmod` is included:
+1. Some clone/archive workflows can drop executable bits.
+2. This prevents `Permission denied` when running `./scripts/*.sh`.
+
+### 4) Set Hugging Face authentication
+
+```bash
+export HF_TOKEN="<your_hf_token>"
+export HUGGINGFACE_HUB_TOKEN="$HF_TOKEN"
+```
+
+Optional CLI login:
+
+```bash
+huggingface-cli login
+```
+
+### 5) Set container timezone (recommended)
+
+Default is already `Asia/Kuala_Lumpur`. Set it explicitly so all shells and runs stay consistent:
+
+```bash
+export CONTAINER_TZ="Asia/Kuala_Lumpur"
+echo 'export CONTAINER_TZ="Asia/Kuala_Lumpur"' >> ~/.bashrc
+source ~/.bashrc
+```
+
+If you need a different timezone, change `CONTAINER_TZ` before running any phase.
+
+### 6) Install and build llama.cpp (required for Phase 4 and Phase 5)
+
+Recommended location:
+1. Keep it in your home folder: `~/llama.cpp`.
+2. Reuse the same build across multiple projects.
+
+```bash
+cd ~
+git clone https://github.com/ggerganov/llama.cpp.git
+cd llama.cpp
+cmake -S . -B build
+cmake --build build -j"$(nproc)"
+```
+
+Set environment variable:
+
+```bash
+echo 'export LLAMA_CPP_DIR="$HOME/llama.cpp"' >> ~/.bashrc
+source ~/.bashrc
+```
+
+Verify:
+
+```bash
+test -f "$LLAMA_CPP_DIR/convert_hf_to_gguf.py" && echo converter_ok
+test -x "$LLAMA_CPP_DIR/build/bin/llama-cli" && echo cli_ok
+```
+
+### 7) Run preflight and full workflow
+
+```bash
+cd ~/finetune-rocm
+./scripts/verify_environment.sh
+
+./scripts/start_finetuning_process.sh prelim
+./scripts/start_finetuning_process.sh prepare
+./scripts/start_finetuning_process.sh train --full
+./scripts/start_finetuning_process.sh compare
+./scripts/start_finetuning_process.sh gguf
+./scripts/start_finetuning_process.sh chat
+```
+
+Important:
+1. `prelim` builds/pulls the Docker image (`finetune-rocm:ready`) automatically.
+2. You do not need to build the training image manually.
+3. Run commands from the repository root (`~/finetune-rocm`).
+
 ## Security and authentication
 
 Never hardcode secrets in scripts.
@@ -166,6 +289,7 @@ Failure policy:
 ```bash
 export HF_TOKEN="<your_hf_token>"
 export HUGGINGFACE_HUB_TOKEN="$HF_TOKEN"
+export CONTAINER_TZ="Asia/Kuala_Lumpur"
 
 ./scripts/start_finetuning_process.sh prelim
 ./scripts/start_finetuning_process.sh prepare
@@ -324,6 +448,7 @@ Actions:
 | `MIN_FREE_GB` | `60` | `verify_environment.sh` | Minimum recommended free disk |
 | `BASE_IMAGE` | ROCm PyTorch image tag | `phase0_prelim.sh` | Docker base image |
 | `IMAGE_NAME` | `finetune-rocm:ready` | phases 0,1,2,3 | Runtime image tag |
+| `CONTAINER_TZ` | `Asia/Kuala_Lumpur` | phases 0,1,2,3 | Container timezone for logs/timestamps |
 | `BASE_MODEL` | Llama 3.1 8B instruct | phases 0,3,4 | Base HF model ID |
 | `FORCE_REBUILD` | `0` | `phase0_prelim.sh` | Force Docker image rebuild |
 | `LLAMA_CPP_DIR` | `<repo>/llama.cpp` | verify, phases 4,5 | llama.cpp root path |
@@ -400,6 +525,11 @@ Phase 2 uses `meta-llama/Meta-Llama-3.1-8B-Instruct` by default inside the embed
 ### Phase 5 cannot find GGUF
 1. Run Phase 4 first.
 2. Or set `MODEL_GGUF` to an existing GGUF path.
+
+### Container time is wrong
+1. Check active setting: `echo "$CONTAINER_TZ"`.
+2. Set it explicitly (example): `export CONTAINER_TZ="Asia/Kuala_Lumpur"`.
+3. Re-run the phase command so a new container starts with the correct timezone.
 
 ## Fresh-server validation sequence
 
