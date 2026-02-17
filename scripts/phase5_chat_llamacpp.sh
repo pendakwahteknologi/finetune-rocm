@@ -97,6 +97,11 @@ echo ""
 tip "Type your prompt and press Enter. Press Ctrl+C to quit."
 echo ""
 
+EXTRA_ARGS=("$@")
+if [ "${#EXTRA_ARGS[@]}" -gt 0 ] && [ "${EXTRA_ARGS[0]}" = "--" ]; then
+  EXTRA_ARGS=("${EXTRA_ARGS[@]:1}")
+fi
+
 exec "$BIN" \
   -m "$MODEL_GGUF" \
   -c "$CTX_SIZE" \
@@ -104,4 +109,4 @@ exec "$BIN" \
   --temp "$TEMP" \
   --top-p "$TOP_P" \
   -t "$THREADS" \
-  -cnv "$@"
+  -cnv "${EXTRA_ARGS[@]}"
