@@ -244,9 +244,13 @@ Recommended location:
 cd ~
 git clone https://github.com/ggerganov/llama.cpp.git
 cd llama.cpp
-cmake -S . -B build
+cmake -S . -B build \
+  -DGGML_HIP=ON \
+  -DGPU_TARGETS=gfx1201
 cmake --build build -j"$(nproc)"
 ```
+
+If your GPU architecture is different, replace `gfx1201` with your target.
 
 Set environment variable:
 
@@ -578,7 +582,7 @@ CLEAN_MERGED_DIR=1 ./scripts/start_finetuning_process.sh gguf
 ```bash
 cd "$LLAMA_CPP_DIR"
 git pull
-cmake -S . -B build
+cmake -S . -B build -DGGML_HIP=ON -DGPU_TARGETS=gfx1201
 cmake --build build -j"$(nproc)"
 ```
 
@@ -588,7 +592,7 @@ cmake --build build -j"$(nproc)"
 
 ```bash
 cd "$LLAMA_CPP_DIR"
-cmake -S . -B build
+cmake -S . -B build -DGGML_HIP=ON -DGPU_TARGETS=gfx1201
 cmake --build build -j"$(nproc)"
 ```
 
@@ -616,12 +620,28 @@ sudo chown -R "$USER":"$USER" .
 1. Run Phase 4 first.
 2. Or set `MODEL_GGUF` to an existing GGUF path.
 
+### `warning: no usable GPU found, --gpu-layers option will be ignored`
+1. Your `llama.cpp` binary was built without HIP/ROCm backend.
+2. Rebuild with ROCm flags:
+
+```bash
+cd "$LLAMA_CPP_DIR"
+cmake -S . -B build -DGGML_HIP=ON -DGPU_TARGETS=gfx1201
+cmake --build build -j"$(nproc)"
+```
+
+3. Verify GPU backend:
+
+```bash
+"$LLAMA_CPP_DIR/build/bin/llama-cli" --list-devices
+```
+
 ### `llama-cli: error while loading shared libraries ...`
 1. Rebuild llama.cpp:
 
 ```bash
 cd "$LLAMA_CPP_DIR"
-cmake -S . -B build
+cmake -S . -B build -DGGML_HIP=ON -DGPU_TARGETS=gfx1201
 cmake --build build -j"$(nproc)"
 ```
 

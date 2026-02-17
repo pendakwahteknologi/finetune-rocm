@@ -69,6 +69,19 @@ if command -v ldd >/dev/null 2>&1; then
   fi
 fi
 
+GPU_BACKEND_CHECK_RC=1
+GPU_BACKEND_LIST="$("$BIN" --list-devices 2>/dev/null || true)"
+if "$BIN" --list-devices >/dev/null 2>&1; then
+  GPU_BACKEND_CHECK_RC=0
+fi
+if [ "$GPU_BACKEND_CHECK_RC" -eq 0 ] && [ "${N_GPU_LAYERS:-0}" != "0" ]; then
+  if ! echo "$GPU_BACKEND_LIST" | grep -Eqi "hip|rocm|amdgpu"; then
+    status_warn "No HIP/ROCm GPU backend detected in llama.cpp binary."
+    tip "Rebuild llama.cpp with ROCm flags; forcing CPU mode for this run."
+    N_GPU_LAYERS=0
+  fi
+fi
+
 banner "Phase 5: Chat with Fine-Tuned Model (llama.cpp)"
 kv "Binary" "$BIN"
 kv "Model" "$MODEL_GGUF"
