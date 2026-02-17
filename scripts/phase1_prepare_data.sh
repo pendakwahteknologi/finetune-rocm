@@ -14,6 +14,17 @@ EVAL_N="${EVAL_N:-200}"
 SEED="${SEED:-42}"
 SYSTEM_PROMPT="${SYSTEM_PROMPT:-You are a helpful assistant.}"
 HF_TOKEN="${HF_TOKEN:-${HUGGINGFACE_HUB_TOKEN:-}}"
+CONTAINER_TZ="${CONTAINER_TZ:-Asia/Kuala_Lumpur}"
+
+TZ_DOCKER_ARGS=(-e "TZ=$CONTAINER_TZ")
+if [ -f "/usr/share/zoneinfo/$CONTAINER_TZ" ]; then
+  TZ_DOCKER_ARGS+=(-v "/usr/share/zoneinfo/$CONTAINER_TZ:/etc/localtime:ro")
+elif [ -f /etc/localtime ]; then
+  TZ_DOCKER_ARGS+=(-v /etc/localtime:/etc/localtime:ro)
+fi
+if [ -f /etc/timezone ]; then
+  TZ_DOCKER_ARGS+=(-v /etc/timezone:/etc/timezone:ro)
+fi
 
 if ! command -v docker >/dev/null 2>&1; then
   status_err "Docker is required but not found in PATH."
@@ -34,9 +45,11 @@ out "  ${WHITE}${BOLD}Image${RESET}         $IMAGE_NAME"
 out "  ${WHITE}${BOLD}OpenOrca Rows${RESET}  $OPENORCA_N"
 out "  ${WHITE}${BOLD}Eval Rows${RESET}      $EVAL_N"
 out "  ${WHITE}${BOLD}Seed${RESET}          $SEED"
+out "  ${WHITE}${BOLD}TZ${RESET}            $CONTAINER_TZ"
 echo ""
 
 docker run --rm \
+  "${TZ_DOCKER_ARGS[@]}" \
   --device=/dev/kfd --device=/dev/dri \
   --group-add video --group-add render \
   -v "$(pwd)":/workspace \

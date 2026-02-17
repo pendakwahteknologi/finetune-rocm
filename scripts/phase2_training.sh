@@ -11,6 +11,17 @@ HF_CACHE_DIR="${HF_CACHE_DIR:-$HOME/.cache/huggingface}"
 CONTAINER_NAME="${CONTAINER_NAME:-rocm-training}"
 TRAIN_LOG="${TRAIN_LOG:-results/training.log}"
 HF_TOKEN="${HF_TOKEN:-${HUGGINGFACE_HUB_TOKEN:-}}"
+CONTAINER_TZ="${CONTAINER_TZ:-Asia/Kuala_Lumpur}"
+
+TZ_DOCKER_ARGS=(-e "TZ=$CONTAINER_TZ")
+if [ -f "/usr/share/zoneinfo/$CONTAINER_TZ" ]; then
+  TZ_DOCKER_ARGS+=(-v "/usr/share/zoneinfo/$CONTAINER_TZ:/etc/localtime:ro")
+elif [ -f /etc/localtime ]; then
+  TZ_DOCKER_ARGS+=(-v /etc/localtime:/etc/localtime:ro)
+fi
+if [ -f /etc/timezone ]; then
+  TZ_DOCKER_ARGS+=(-v /etc/timezone:/etc/timezone:ro)
+fi
 
 # Defaults (can be overridden by env)
 MAX_TRAIN_ROWS_DEFAULT="${MAX_TRAIN_ROWS:-2000}"
@@ -559,12 +570,14 @@ if [ "$MODE" = "background" ]; then
   out "  ${WHITE}${BOLD}Log File${RESET}   $TRAIN_LOG"
   out "  ${WHITE}${BOLD}Rows${RESET}       $MAX_TRAIN_ROWS_RUN"
   out "  ${WHITE}${BOLD}Seq Len${RESET}    $SEQ_LEN_RUN"
+  out "  ${WHITE}${BOLD}TZ${RESET}         $CONTAINER_TZ"
   out "  ${WHITE}${BOLD}Output${RESET}     $OUT_DIR_RUN"
   echo ""
 
   rm -f "$TRAIN_LOG"
 
   nohup docker run --rm \
+    "${TZ_DOCKER_ARGS[@]}" \
     --name "$CONTAINER_NAME" \
     --cap-add=SYS_PTRACE \
     --security-opt seccomp=unconfined \
@@ -589,9 +602,11 @@ fi
 banner "Phase 2: Start Training (Interactive)"
 out "  ${WHITE}${BOLD}Rows${RESET}    $MAX_TRAIN_ROWS_RUN"
 out "  ${WHITE}${BOLD}Seq Len${RESET}  $SEQ_LEN_RUN"
+out "  ${WHITE}${BOLD}TZ${RESET}       $CONTAINER_TZ"
 out "  ${WHITE}${BOLD}Output${RESET}  $OUT_DIR_RUN"
 
 docker run -it --rm \
+  "${TZ_DOCKER_ARGS[@]}" \
   --cap-add=SYS_PTRACE \
   --security-opt seccomp=unconfined \
   --ulimit memlock=-1 \

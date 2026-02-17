@@ -11,6 +11,17 @@ LORA_ADAPTER="${LORA_ADAPTER:-models/lora_simple_rocm_out}"
 IMAGE_NAME="${IMAGE_NAME:-finetune-rocm:ready}"
 HF_CACHE_DIR="${HF_CACHE_DIR:-$HOME/.cache/huggingface}"
 HF_TOKEN="${HF_TOKEN:-${HUGGINGFACE_HUB_TOKEN:-}}"
+CONTAINER_TZ="${CONTAINER_TZ:-Asia/Kuala_Lumpur}"
+
+TZ_DOCKER_ARGS=(-e "TZ=$CONTAINER_TZ")
+if [ -f "/usr/share/zoneinfo/$CONTAINER_TZ" ]; then
+  TZ_DOCKER_ARGS+=(-v "/usr/share/zoneinfo/$CONTAINER_TZ:/etc/localtime:ro")
+elif [ -f /etc/localtime ]; then
+  TZ_DOCKER_ARGS+=(-v /etc/localtime:/etc/localtime:ro)
+fi
+if [ -f /etc/timezone ]; then
+  TZ_DOCKER_ARGS+=(-v /etc/timezone:/etc/timezone:ro)
+fi
 
 if ! command -v docker >/dev/null 2>&1; then
   status_err "Docker is required but not found in PATH."
@@ -32,6 +43,7 @@ banner "Phase 3: Generate Comparison Report"
 out "  ${WHITE}${BOLD}Base Model${RESET}  $BASE_MODEL"
 out "  ${WHITE}${BOLD}LoRA Model${RESET}  $LORA_ADAPTER"
 out "  ${WHITE}${BOLD}Image${RESET}       $IMAGE_NAME"
+out "  ${WHITE}${BOLD}TZ${RESET}          $CONTAINER_TZ"
 echo ""
 
 if ! docker image inspect "$IMAGE_NAME" >/dev/null 2>&1; then
@@ -41,6 +53,7 @@ if ! docker image inspect "$IMAGE_NAME" >/dev/null 2>&1; then
 fi
 
 docker run --rm \
+  "${TZ_DOCKER_ARGS[@]}" \
   --device=/dev/kfd --device=/dev/dri \
   --group-add video --group-add render \
   -v "$(pwd)":/workspace \
