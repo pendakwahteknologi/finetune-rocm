@@ -29,6 +29,11 @@ fail() {
 }
 
 banner "Prelim: Environment Verification"
+kv "Repository" "$ROOT_DIR"
+kv "Required free GB" "$MIN_FREE_GB"
+echo ""
+
+section "Platform"
 
 if [ -f /etc/os-release ]; then
   # shellcheck disable=SC1091
@@ -43,6 +48,8 @@ if [ -f /etc/os-release ]; then
 else
   warn "OS check: /etc/os-release not found"
 fi
+
+section "Docker and ROCm"
 
 if command -v docker >/dev/null 2>&1; then
   pass "Docker binary found"
@@ -70,6 +77,8 @@ else
   fail "Graphics device directory missing: /dev/dri"
 fi
 
+section "Access and Connectivity"
+
 for grp in video render; do
   if id -nG 2>/dev/null | tr ' ' '\n' | grep -qx "$grp"; then
     pass "User is in group: $grp"
@@ -96,6 +105,8 @@ if command -v curl >/dev/null 2>&1; then
 else
   warn "curl not found; skipped network reachability check"
 fi
+
+section "Tooling and Capacity"
 
 if command -v python >/dev/null 2>&1; then
   pass "Host Python found: python (optional)"
@@ -127,17 +138,19 @@ else
 fi
 
 echo ""
+section "Verification Summary"
+kv "Critical issues" "$FAILS"
+kv "Warnings" "$WARNS"
+echo ""
 if [ "$FAILS" -gt 0 ]; then
   status_err "Environment verification failed ($FAILS critical issue(s), $WARNS warning(s))."
-  out "  Fix the critical issues above, then re-run:"
-  out "    ./scripts/verify_environment.sh"
+  tip "Fix the critical issues above, then re-run: ./scripts/verify_environment.sh"
   exit 1
 fi
 
 status_ok "Environment verification passed ($WARNS warning(s))."
 if [ "$VERIFY_FROM_PRELIM" = "1" ]; then
-  out "  Continuing Phase 0 setup..."
+  tip "Continuing Phase 0 setup..."
 else
-  out "  Next:"
-  out "    ./scripts/start_finetuning_process.sh prelim"
+  tip "Next: ./scripts/start_finetuning_process.sh prelim"
 fi

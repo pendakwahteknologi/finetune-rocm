@@ -25,13 +25,14 @@ if [ -f /etc/timezone ]; then
 fi
 
 banner "Phase 0: Prelim Setup"
-out "  ${WHITE}${BOLD}Steps${RESET}  Verify environment, build image, cache base model"
-out "  ${WHITE}${BOLD}Image${RESET}  $IMAGE_NAME"
-out "  ${WHITE}${BOLD}Model${RESET}  $BASE_MODEL"
-out "  ${WHITE}${BOLD}TZ${RESET}     $CONTAINER_TZ"
+kv "Objective" "Verify env, build image, cache base model"
+kv "Image" "$IMAGE_NAME"
+kv "Base image" "$BASE_IMAGE"
+kv "Base model" "$BASE_MODEL"
+kv "Timezone" "$CONTAINER_TZ"
 echo ""
 
-out "  ${YELLOW}[1/4] Verifying environment${RESET}"
+step 1 4 "Verifying environment"
 VERIFY_FROM_PRELIM=1 "$ROOT_DIR/scripts/verify_environment.sh"
 echo ""
 
@@ -45,10 +46,10 @@ fi
 if docker image inspect "$IMAGE_NAME" >/dev/null 2>&1; then
   status_ok "[2/4] Image exists: $IMAGE_NAME (skip pull/build)"
 else
-  out "  ${YELLOW}[2/4] Pulling base image${RESET}  $BASE_IMAGE"
+  step 2 4 "Pulling base image: $BASE_IMAGE"
   docker pull "$BASE_IMAGE"
 
-  out "  ${YELLOW}[3/4] Building training image${RESET}  $IMAGE_NAME"
+  step 3 4 "Building training image: $IMAGE_NAME"
   docker build --build-arg BASE_IMAGE="$BASE_IMAGE" -t "$IMAGE_NAME" -f - . <<'DOCKERFILE'
 ARG BASE_IMAGE
 FROM ${BASE_IMAGE}
@@ -58,7 +59,7 @@ RUN pip install --upgrade pip && \
 DOCKERFILE
 fi
 
-out "  ${YELLOW}[4/4] Caching base model${RESET}  $BASE_MODEL"
+step 4 4 "Caching base model: $BASE_MODEL"
 docker run --rm \
   "${TZ_DOCKER_ARGS[@]}" \
   -v "$HF_CACHE_DIR":/root/.cache/huggingface \
@@ -72,7 +73,7 @@ print('Model cache ready')
 
 echo ""
 status_ok "Prelim complete"
-out "  Next:"
+section "Next Commands"
 out "    ./scripts/start_finetuning_process.sh prepare"
 out "    ./scripts/start_finetuning_process.sh train"
 out "    ./scripts/start_finetuning_process.sh compare"

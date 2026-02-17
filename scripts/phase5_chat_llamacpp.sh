@@ -25,11 +25,10 @@ fi
 
 if [ ! -f "$MODEL_GGUF" ]; then
   status_err "No GGUF model found."
-  out "  Expected one of:"
+  section "Expected model path"
   out "    - $ROOT_DIR/models/gguf/model-Q8_0.gguf"
   out "    - $ROOT_DIR/models/gguf/model-f16.gguf"
-  out "  Run Phase 4 first:"
-  out "    ./scripts/start_finetuning_process.sh gguf"
+  tip "Run Phase 4 first: ./scripts/start_finetuning_process.sh gguf"
   exit 1
 fi
 
@@ -39,20 +38,23 @@ elif [ -x "$LLAMA_MAIN" ]; then
   BIN="$LLAMA_MAIN"
 else
   status_err "llama.cpp binary not found."
-  out "  Checked:"
+  section "Checked paths"
   out "    - $LLAMA_CLI"
   out "    - $LLAMA_MAIN"
-  out "  Build llama.cpp and/or set LLAMA_CPP_DIR."
+  tip "Build llama.cpp and/or set LLAMA_CPP_DIR."
   exit 1
 fi
 
 banner "Phase 5: Chat with Fine-Tuned Model (llama.cpp)"
-out "  ${WHITE}${BOLD}Binary${RESET}      $BIN"
-out "  ${WHITE}${BOLD}Model${RESET}       $MODEL_GGUF"
-out "  ${WHITE}${BOLD}Context${RESET}     $CTX_SIZE"
-out "  ${WHITE}${BOLD}GPU Layers${RESET}  $N_GPU_LAYERS"
+kv "Binary" "$BIN"
+kv "Model" "$MODEL_GGUF"
+kv "Context" "$CTX_SIZE"
+kv "GPU layers" "$N_GPU_LAYERS"
+kv "Threads" "$THREADS"
+kv "Temperature" "$TEMP"
+kv "Top-p" "$TOP_P"
 echo ""
-out "  ${DIM}Type your prompt and press Enter. Ctrl+C to quit.${RESET}"
+tip "Type your prompt and press Enter. Press Ctrl+C to quit."
 echo ""
 
 exec "$BIN" \

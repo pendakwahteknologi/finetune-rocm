@@ -67,19 +67,19 @@ GGUF_OUT_DIR_CONTAINER="$(to_container_path "$GGUF_OUT_DIR")"
 
 if ! command -v docker >/dev/null 2>&1; then
   status_err "Docker is required but not found in PATH."
-  out "  Install Docker, then re-run phase 4."
+  tip "Install Docker, then re-run phase 4."
   exit 1
 fi
 
 if ! docker image inspect "$IMAGE_NAME" >/dev/null 2>&1; then
   status_err "Pre-built image not found: $IMAGE_NAME"
-  out "  Run ./scripts/start_finetuning_process.sh prelim first."
+  tip "Run ./scripts/start_finetuning_process.sh prelim first."
   exit 1
 fi
 
 if [ -z "$HF_TOKEN" ]; then
   status_err "HF token is required for GGUF export (base model merge step)."
-  out "  Set it first:"
+  tip "Set it first:"
   out "    export HF_TOKEN=\"<your_hf_token>\""
   out "    export HUGGINGFACE_HUB_TOKEN=\"\$HF_TOKEN\""
   exit 1
@@ -91,13 +91,13 @@ QUANTIZE_BIN_ALT="$LLAMA_CPP_DIR/llama-quantize"
 
 if [ ! -f "$CONVERT_SCRIPT" ]; then
   status_err "Missing converter: $CONVERT_SCRIPT"
-  out "  Set LLAMA_CPP_DIR to your llama.cpp checkout."
+  tip "Set LLAMA_CPP_DIR to your llama.cpp checkout."
   exit 1
 fi
 
 if [ ! -d "$LORA_ADAPTER_HOST" ]; then
   status_err "LoRA adapter not found: $LORA_ADAPTER_HOST"
-  out "  Run training first or set LORA_ADAPTER to an existing adapter path."
+  tip "Run training first or set LORA_ADAPTER to an existing adapter path."
   exit 1
 fi
 
@@ -113,20 +113,24 @@ for dir in "$MERGED_DIR_HOST" "$GGUF_OUT_DIR_HOST"; do
 done
 
 banner "Phase 4: Export Merged GGUF"
-out "  ${WHITE}${BOLD}Image${RESET}   $IMAGE_NAME"
-out "  ${WHITE}${BOLD}TZ${RESET}      $CONTAINER_TZ"
-out "  ${WHITE}${BOLD}Merge Map${RESET}  $MERGE_DEVICE_MAP"
-out "  ${WHITE}${BOLD}Clean Merge${RESET}  $CLEAN_MERGED_DIR"
+kv "Image" "$IMAGE_NAME"
+kv "Timezone" "$CONTAINER_TZ"
+kv "Base model" "$BASE_MODEL"
+kv "LoRA adapter" "$LORA_ADAPTER_HOST"
+kv "Merged dir" "$MERGED_DIR_HOST"
+kv "GGUF dir" "$GGUF_OUT_DIR_HOST"
+kv "Merge map" "$MERGE_DEVICE_MAP"
+kv "Clean merge" "$CLEAN_MERGED_DIR"
 echo ""
 
 if [ "$CLEAN_MERGED_DIR" = "1" ]; then
-  out "  ${YELLOW}Cleaning previous merged output${RESET}  $MERGED_DIR_HOST"
+  status_warn "Cleaning previous merged output: $MERGED_DIR_HOST"
   rm -rf "$MERGED_DIR_HOST"
   mkdir -p "$MERGED_DIR_HOST"
 fi
 echo ""
 
-out "  ${YELLOW}[1/3] Merging LoRA adapter into base model${RESET}"
+step 1 3 "Merging LoRA adapter into base model"
 docker run --rm \
   -i \
   "${TZ_DOCKER_ARGS[@]}" \
@@ -214,12 +218,12 @@ PYEOF
 
 F16_GGUF_HOST="$GGUF_OUT_DIR_HOST/model-${GGUF_OUTTYPE}.gguf"
 F16_GGUF_CONTAINER="$GGUF_OUT_DIR_CONTAINER/model-${GGUF_OUTTYPE}.gguf"
-out "  ${YELLOW}[2/3] Converting merged model to GGUF${RESET}  $F16_GGUF_HOST"
+step 2 3 "Converting merged model to GGUF: $F16_GGUF_HOST"
 if [ ! -f "$MERGED_DIR_HOST/config.json" ]; then
   status_err "Missing merged config: $MERGED_DIR_HOST/config.json"
-  out "  Merge step did not produce a valid HF model directory."
+  tip "Merge step did not produce a valid HF model directory."
   if [ -d "$MERGED_DIR_HOST" ]; then
-    out "  Current files in merged dir:"
+    section "Current files in merged dir"
     ls -1 "$MERGED_DIR_HOST" | sed 's/^/    - /'
   fi
   exit 1
@@ -245,16 +249,17 @@ fi
 
 if [ ! -x "$QUANTIZE_BIN" ]; then
   status_warn "Quantizer not found in llama.cpp build."
-  out "  Built GGUF (unquantized): $F16_GGUF_HOST"
-  out "  Build llama.cpp and re-run for quantization."
+  kv "Built (unquantized)" "$F16_GGUF_HOST"
+  tip "Build llama.cpp and re-run for quantization."
   exit 0
 fi
 
 QUANTIZED_GGUF_HOST="$GGUF_OUT_DIR_HOST/model-${QUANTIZE_TYPE}.gguf"
-out "  ${YELLOW}[3/3] Quantizing GGUF${RESET}  $QUANTIZE_TYPE"
+step 3 3 "Quantizing GGUF -> $QUANTIZE_TYPE"
 "$QUANTIZE_BIN" "$F16_GGUF_HOST" "$QUANTIZED_GGUF_HOST" "$QUANTIZE_TYPE"
 
 echo ""
 status_ok "GGUF export complete"
-out "  - $F16_GGUF_HOST"
-out "  - $QUANTIZED_GGUF_HOST"
+section "Artifacts"
+kv "GGUF f16" "$F16_GGUF_HOST"
+kv "GGUF quantized" "$QUANTIZED_GGUF_HOST"

@@ -66,7 +66,8 @@ for arg in "$@"; do
     --full) FULL_RUN="1" ;;
     -h|--help) usage; exit 0 ;;
     *)
-      echo "Unknown option: $arg"
+      status_err "Unknown option: $arg"
+      tip "Use --help to see valid training options."
       usage
       exit 1
       ;;
@@ -75,19 +76,22 @@ done
 
 if ! command -v docker >/dev/null 2>&1; then
   status_err "Docker is required but not found in PATH."
-  out "  Install Docker, then re-run phase 2."
+  tip "Install Docker, then re-run phase 2."
   exit 1
 fi
 
 status() {
   banner "Phase 2: Training Status"
+  kv "Container" "$CONTAINER_NAME"
+  kv "Log file" "$TRAIN_LOG"
+  echo ""
 
   if docker ps --filter "name=^/${CONTAINER_NAME}$" --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
     status_ok "Training is running"
     docker ps --filter "name=^/${CONTAINER_NAME}$" --format "table {{.Names}}\t{{.Status}}\t{{.RunningFor}}"
     if [ -f "$TRAIN_LOG" ]; then
       section "Last 20 Log Lines"
-      out "  ${DIM}$TRAIN_LOG${RESET}"
+      kv "Source" "$TRAIN_LOG"
       tail -n 20 "$TRAIN_LOG"
     fi
     echo ""
@@ -104,7 +108,7 @@ status() {
       status_warn "Last run may have stopped with errors"
     fi
     section "Last 30 Log Lines"
-    out "  ${DIM}$TRAIN_LOG${RESET}"
+    kv "Source" "$TRAIN_LOG"
     tail -n 30 "$TRAIN_LOG"
   else
     status_warn "No training log found yet: $TRAIN_LOG"
@@ -132,7 +136,7 @@ fi
 
 if [ -z "$HF_TOKEN" ]; then
   status_err "HF token is required for training."
-  out "  Set it first:"
+  tip "Set it first:"
   out "    export HF_TOKEN=\"<your_hf_token>\""
   out "    export HUGGINGFACE_HUB_TOKEN=\"\$HF_TOKEN\""
   exit 1
@@ -142,14 +146,14 @@ mkdir -p "$HF_CACHE_DIR" results
 
 if ! docker image inspect "$IMAGE_NAME" >/dev/null 2>&1; then
   status_err "Pre-built image not found: $IMAGE_NAME"
-  out "  Run ./scripts/start_finetuning_process.sh prelim first."
+  tip "Run ./scripts/start_finetuning_process.sh prelim first."
   exit 1
 fi
 
 if [ ! -f "data/train_chatml.jsonl" ]; then
   status_err "Training dataset not found: data/train_chatml.jsonl"
-  out "  Run: ./scripts/start_finetuning_process.sh prepare"
-  out "  Then verify: ls -lh data/train_chatml.jsonl"
+  tip "Run: ./scripts/start_finetuning_process.sh prepare"
+  tip "Then verify: ls -lh data/train_chatml.jsonl"
   exit 1
 fi
 
@@ -566,16 +570,17 @@ CMD
 
 if [ "$MODE" = "background" ]; then
   banner "Phase 2: Start Background Training"
-  out "  ${WHITE}${BOLD}Container${RESET}  $CONTAINER_NAME"
-  out "  ${WHITE}${BOLD}Log File${RESET}   $TRAIN_LOG"
-  out "  ${WHITE}${BOLD}Rows${RESET}       $MAX_TRAIN_ROWS_RUN"
-  out "  ${WHITE}${BOLD}Seq Len${RESET}    $SEQ_LEN_RUN"
-  out "  ${WHITE}${BOLD}TZ${RESET}         $CONTAINER_TZ"
-  out "  ${WHITE}${BOLD}Output${RESET}     $OUT_DIR_RUN"
+  kv "Container" "$CONTAINER_NAME"
+  kv "Log file" "$TRAIN_LOG"
+  kv "Rows" "$MAX_TRAIN_ROWS_RUN"
+  kv "Seq len" "$SEQ_LEN_RUN"
+  kv "Timezone" "$CONTAINER_TZ"
+  kv "Output" "$OUT_DIR_RUN"
   echo ""
 
   rm -f "$TRAIN_LOG"
 
+  step 1 1 "Launching training container in background"
   nohup docker run --rm \
     "${TZ_DOCKER_ARGS[@]}" \
     --name "$CONTAINER_NAME" \
@@ -594,16 +599,18 @@ if [ "$MODE" = "background" ]; then
     "$IMAGE_NAME" bash -lc "$run_cmd" > "$TRAIN_LOG" 2>&1 &
 
   status_ok "Training started in background"
-  out "  Check status: ./scripts/phase2_training.sh --status"
-  out "  Follow logs : tail -f $TRAIN_LOG"
+  tip "Check status: ./scripts/phase2_training.sh --status"
+  tip "Follow logs : tail -f $TRAIN_LOG"
   exit 0
 fi
 
 banner "Phase 2: Start Training (Interactive)"
-out "  ${WHITE}${BOLD}Rows${RESET}    $MAX_TRAIN_ROWS_RUN"
-out "  ${WHITE}${BOLD}Seq Len${RESET}  $SEQ_LEN_RUN"
-out "  ${WHITE}${BOLD}TZ${RESET}       $CONTAINER_TZ"
-out "  ${WHITE}${BOLD}Output${RESET}  $OUT_DIR_RUN"
+kv "Rows" "$MAX_TRAIN_ROWS_RUN"
+kv "Seq len" "$SEQ_LEN_RUN"
+kv "Timezone" "$CONTAINER_TZ"
+kv "Output" "$OUT_DIR_RUN"
+echo ""
+step 1 1 "Launching training container (interactive)"
 
 docker run -it --rm \
   "${TZ_DOCKER_ARGS[@]}" \

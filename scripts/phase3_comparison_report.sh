@@ -25,13 +25,13 @@ fi
 
 if ! command -v docker >/dev/null 2>&1; then
   status_err "Docker is required but not found in PATH."
-  out "  Install Docker, then re-run phase 3."
+  tip "Install Docker, then re-run phase 3."
   exit 1
 fi
 
 if [ -z "$HF_TOKEN" ]; then
   status_err "HF token is required for comparison."
-  out "  Set it first:"
+  tip "Set it first:"
   out "    export HF_TOKEN=\"<your_hf_token>\""
   out "    export HUGGINGFACE_HUB_TOKEN=\"\$HF_TOKEN\""
   exit 1
@@ -40,18 +40,19 @@ fi
 mkdir -p "$HF_CACHE_DIR" results
 
 banner "Phase 3: Generate Comparison Report"
-out "  ${WHITE}${BOLD}Base Model${RESET}  $BASE_MODEL"
-out "  ${WHITE}${BOLD}LoRA Model${RESET}  $LORA_ADAPTER"
-out "  ${WHITE}${BOLD}Image${RESET}       $IMAGE_NAME"
-out "  ${WHITE}${BOLD}TZ${RESET}          $CONTAINER_TZ"
+kv "Base model" "$BASE_MODEL"
+kv "LoRA adapter" "$LORA_ADAPTER"
+kv "Image" "$IMAGE_NAME"
+kv "Timezone" "$CONTAINER_TZ"
 echo ""
 
 if ! docker image inspect "$IMAGE_NAME" >/dev/null 2>&1; then
   status_err "Pre-built image not found: $IMAGE_NAME"
-  out "  Run ./scripts/start_finetuning_process.sh prelim first."
+  tip "Run ./scripts/start_finetuning_process.sh prelim first."
   exit 1
 fi
 
+step 1 1 "Running comparison and report generation in Docker"
 docker run --rm \
   "${TZ_DOCKER_ARGS[@]}" \
   --device=/dev/kfd --device=/dev/dri \
@@ -858,6 +859,7 @@ PYEOF
 
 echo ""
 status_ok "Comparison complete"
-out "  Results saved to: results/comparison_results.json"
-out "  HTML report: results/comparison_report.html"
-out "  Open in browser: file://$(pwd)/results/comparison_report.html"
+section "Artifacts"
+kv "JSON" "results/comparison_results.json"
+kv "HTML" "results/comparison_report.html"
+tip "Open in browser: file://$(pwd)/results/comparison_report.html"

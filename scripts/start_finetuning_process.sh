@@ -30,7 +30,7 @@ PHASE="${1:-}"
 shift || true
 
 banner "Fine-Tuning Process Dispatcher"
-out "  ${DIM}Selected phase: ${PHASE:-<none>}${RESET}"
+kv "Selected phase" "${PHASE:-<none>}"
 echo ""
 
 case "$PHASE" in
@@ -54,6 +54,7 @@ case "$PHASE" in
     ;;
   *)
     status_err "Unknown phase: ${PHASE:-<none>}"
+    tip "Use one of: prelim | prepare | train | compare | gguf | chat"
     echo ""
     usage
     exit 1

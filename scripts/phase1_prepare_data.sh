@@ -28,7 +28,7 @@ fi
 
 if ! command -v docker >/dev/null 2>&1; then
   status_err "Docker is required but not found in PATH."
-  out "  Install Docker, then re-run phase 1."
+  tip "Install Docker, then re-run phase 1."
   exit 1
 fi
 
@@ -36,18 +36,19 @@ mkdir -p "$HF_CACHE_DIR"
 
 if ! docker image inspect "$IMAGE_NAME" >/dev/null 2>&1; then
   status_err "Pre-built image not found: $IMAGE_NAME"
-  out "  Run ./scripts/start_finetuning_process.sh prelim first."
+  tip "Run ./scripts/start_finetuning_process.sh prelim first."
   exit 1
 fi
 
 banner "Phase 1: Prepare Training Data"
-out "  ${WHITE}${BOLD}Image${RESET}         $IMAGE_NAME"
-out "  ${WHITE}${BOLD}OpenOrca Rows${RESET}  $OPENORCA_N"
-out "  ${WHITE}${BOLD}Eval Rows${RESET}      $EVAL_N"
-out "  ${WHITE}${BOLD}Seed${RESET}          $SEED"
-out "  ${WHITE}${BOLD}TZ${RESET}            $CONTAINER_TZ"
+kv "Image" "$IMAGE_NAME"
+kv "OpenOrca rows" "$OPENORCA_N"
+kv "Eval rows" "$EVAL_N"
+kv "Seed" "$SEED"
+kv "Timezone" "$CONTAINER_TZ"
 echo ""
 
+step 1 1 "Running data pipeline in Docker"
 docker run --rm \
   "${TZ_DOCKER_ARGS[@]}" \
   --device=/dev/kfd --device=/dev/dri \
@@ -66,14 +67,14 @@ docker run --rm \
 
 if [ ! -f "data/train_chatml.jsonl" ]; then
   status_err "Expected output missing: data/train_chatml.jsonl"
-  out "  Re-run prepare and ensure you are in the repository root."
+  tip "Re-run prepare and ensure you are in the repository root."
   exit 1
 fi
 
 echo ""
 status_ok "Data prep complete"
-out "  Outputs:"
-out "    - data/dolly15k_plus_openorca${OPENORCA_N}.jsonl"
-out "    - data/train_clean.jsonl"
-out "    - data/eval_prompts.jsonl"
-out "    - data/train_chatml.jsonl"
+section "Outputs"
+out "  - data/dolly15k_plus_openorca${OPENORCA_N}.jsonl"
+out "  - data/train_clean.jsonl"
+out "  - data/eval_prompts.jsonl"
+out "  - data/train_chatml.jsonl"
