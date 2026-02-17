@@ -20,10 +20,10 @@ USE_FP16_DEFAULT="${USE_FP16:-1}"
 USE_BF16_DEFAULT="${USE_BF16:-0}"
 DATALOADER_WORKERS_DEFAULT="${DATALOADER_WORKERS:-0}"
 OUT_DIR_DEFAULT="${OUT_DIR:-/workspace/models/lora_simple_rocm_out}"
-SEQ_LEN_DEFAULT="${SEQ_LEN:-512}"
+SEQ_LEN_DEFAULT="${SEQ_LEN:-384}"
 ATTN_IMPL_DEFAULT="${ATTN_IMPL:-eager}"
 GRADIENT_CHECKPOINTING_DEFAULT="${GRADIENT_CHECKPOINTING:-1}"
-PYTORCH_ALLOC_CONF_DEFAULT="${PYTORCH_ALLOC_CONF:-${PYTORCH_HIP_ALLOC_CONF:-expandable_segments:True,max_split_size_mb:128,garbage_collection_threshold:0.8}}"
+PYTORCH_ALLOC_CONF_DEFAULT="${PYTORCH_ALLOC_CONF:-${PYTORCH_HIP_ALLOC_CONF:-max_split_size_mb:64,garbage_collection_threshold:0.7}}"
 
 MODE="foreground"
 FULL_RUN="0"
@@ -151,7 +151,7 @@ if [ "$FULL_RUN" = "1" ]; then
   MAX_TRAIN_ROWS_RUN="${MAX_TRAIN_ROWS_FULL:-20011}"
   OUT_DIR_RUN="${OUT_DIR_FULL:-/workspace/models/lora_full_20k_rocm_out}"
   if [ -z "${SEQ_LEN:-}" ]; then
-    SEQ_LEN_RUN="384"
+    SEQ_LEN_RUN="256"
   fi
 fi
 
