@@ -23,6 +23,37 @@ ROCm pipelines often fail due to host drift (package versions, Python environmen
 Phase 4 and Phase 5 are post-training operations and use local tooling (`python` plus `llama.cpp`). Phase 4 still checks Docker availability as a project guardrail.
 For Phase 0 to Phase 3, scripts also pass timezone settings into `docker run` so logs and timestamps stay consistent.
 
+## Official AMD ROCm Docker reference used by this project
+
+This repository follows AMD ROCm official PyTorch installation guidance:
+
+1. PyTorch on ROCm installation:
+   - https://rocm.docs.amd.com/projects/install-on-linux/en/latest/install/3rd-party/pytorch-install.html
+2. Docker with PyTorch pre-installed:
+   - https://rocm.docs.amd.com/projects/install-on-linux/en/latest/install/3rd-party/pytorch-install.html#using-docker-with-pytorch-pre-installed
+
+The project default base image in `scripts/phase0_prelim.sh` is:
+- `rocm/pytorch:rocm7.2_ubuntu24.04_py3.12_pytorch_release_2.9.1`
+
+Why this pinned tag is used instead of `latest`:
+1. Better reproducibility for demos and troubleshooting.
+2. Clear alignment with a validated ROCm/PyTorch inventory.
+3. Reduced drift risk when upstream tags move.
+
+You can still override it when needed:
+
+```bash
+export BASE_IMAGE="rocm/pytorch:latest"
+./scripts/start_finetuning_process.sh prelim
+```
+
+or pin another AMD-supported tag:
+
+```bash
+export BASE_IMAGE="rocm/pytorch:rocm7.2_ubuntu24.04_py3.12_pytorch_release_2.9.1"
+./scripts/start_finetuning_process.sh prelim
+```
+
 ## Why this base model is used
 
 Default base model:
@@ -151,6 +182,21 @@ newgrp docker
 docker --version
 docker info
 ```
+
+Optional validation against AMD ROCm docs before running prelim:
+
+```bash
+docker pull rocm/pytorch:latest
+docker pull rocm/pytorch:rocm7.2_ubuntu24.04_py3.12_pytorch_release_2.9.1
+```
+
+Then run:
+
+```bash
+./scripts/start_finetuning_process.sh prelim
+```
+
+`prelim` will pull/build using `BASE_IMAGE` automatically.
 
 ### 3) Clone this project and fix script permissions
 
@@ -446,7 +492,7 @@ Actions:
 | Variable | Default | Used by | Purpose |
 |---|---|---|---|
 | `MIN_FREE_GB` | `60` | `verify_environment.sh` | Minimum recommended free disk |
-| `BASE_IMAGE` | ROCm PyTorch image tag | `phase0_prelim.sh` | Docker base image |
+| `BASE_IMAGE` | `rocm/pytorch:rocm7.2_ubuntu24.04_py3.12_pytorch_release_2.9.1` | `phase0_prelim.sh` | Docker base image (AMD ROCm PyTorch tag) |
 | `IMAGE_NAME` | `finetune-rocm:ready` | phases 0,1,2,3 | Runtime image tag |
 | `CONTAINER_TZ` | `Asia/Kuala_Lumpur` | phases 0,1,2,3 | Container timezone for logs/timestamps |
 | `BASE_MODEL` | Llama 3.1 8B instruct | phases 0,3,4 | Base HF model ID |
