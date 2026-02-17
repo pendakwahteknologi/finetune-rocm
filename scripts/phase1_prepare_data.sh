@@ -8,7 +8,7 @@ source "$ROOT_DIR/scripts/cli_theme.sh"
 
 IMAGE_NAME="${IMAGE_NAME:-finetune-rocm:ready}"
 HF_CACHE_DIR="${HF_CACHE_DIR:-$HOME/.cache/huggingface}"
-BASE_DIR="${BASE_DIR:-/workspace}"
+BASE_DIR="/workspace"
 OPENORCA_N="${OPENORCA_N:-5000}"
 EVAL_N="${EVAL_N:-200}"
 SEED="${SEED:-42}"
@@ -217,6 +217,12 @@ write_jsonl(chatml_out, chatml_rows)
 print(f"Saved ChatML train set: {chatml_out} ({len(chatml_rows)} rows)")
 print("Phase 1 complete.")
 PYEOF
+
+if [ ! -f "data/train_chatml.jsonl" ]; then
+  status_err "Expected output missing: data/train_chatml.jsonl"
+  out "  Re-run prepare and ensure you are in the repository root."
+  exit 1
+fi
 
 echo ""
 status_ok "Data prep complete"

@@ -133,6 +133,13 @@ if ! docker image inspect "$IMAGE_NAME" >/dev/null 2>&1; then
   exit 1
 fi
 
+if [ ! -f "data/train_chatml.jsonl" ]; then
+  status_err "Training dataset not found: data/train_chatml.jsonl"
+  out "  Run: ./scripts/start_finetuning_process.sh prepare"
+  out "  Then verify: ls -lh data/train_chatml.jsonl"
+  exit 1
+fi
+
 MAX_TRAIN_ROWS_RUN="$MAX_TRAIN_ROWS_DEFAULT"
 OUT_DIR_RUN="$OUT_DIR_DEFAULT"
 if [ "$FULL_RUN" = "1" ]; then
@@ -141,6 +148,8 @@ if [ "$FULL_RUN" = "1" ]; then
 fi
 
 run_cmd=$(cat <<CMD
+set -euo pipefail
+
 # ROCm stability settings
 export GPU_MAX_HW_QUEUES=2
 export HSA_ENABLE_SDMA=0
