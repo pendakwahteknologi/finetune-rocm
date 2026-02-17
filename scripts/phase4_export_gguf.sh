@@ -40,7 +40,15 @@ if [ ! -f "$CONVERT_SCRIPT" ]; then
   exit 1
 fi
 
-mkdir -p "$GGUF_OUT_DIR"
+for dir in "$MERGED_DIR" "$GGUF_OUT_DIR"; do
+  if ! mkdir -p "$dir" 2>/dev/null; then
+    status_err "Cannot create directory: $dir (permission denied)"
+    out "  This usually means earlier Docker phases created root-owned files."
+    out "  Fix ownership from repo root, then re-run phase 4:"
+    out "    sudo chown -R \"\$USER\":\"\$USER\" ."
+    exit 1
+  fi
+done
 
 banner "Phase 4: Export Merged GGUF"
 

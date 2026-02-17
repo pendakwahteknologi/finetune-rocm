@@ -568,6 +568,20 @@ Phase 2 uses `meta-llama/Meta-Llama-3.1-8B-Instruct` by default inside the embed
 1. Set `LLAMA_CPP_DIR` correctly.
 2. Ensure llama.cpp repository is present and built.
 
+### `mkdir: cannot create directory 'models/gguf': Permission denied`
+1. This is usually ownership drift from Docker-created files.
+2. From repo root, fix ownership:
+
+```bash
+sudo chown -R "$USER":"$USER" .
+```
+
+3. Re-run:
+
+```bash
+./scripts/start_finetuning_process.sh gguf
+```
+
 ### Phase 5 cannot find GGUF
 1. Run Phase 4 first.
 2. Or set `MODEL_GGUF` to an existing GGUF path.
