@@ -1,0 +1,22 @@
+# Production LoRA Training Requirements for ROCm
+# Install PyTorch for ROCm separately:
+# pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/rocm6.2
+
+# Core dependencies
+transformers>=4.41.0
+datasets>=2.18.0
+peft>=0.11.0
+accelerate>=0.30.0
+
+# Tokenizers and utilities
+tokenizers>=0.19.0
+sentencepiece>=0.2.0
+protobuf>=3.20.0
+
+# Optional but recommended for better performance
+einops>=0.7.0
+safetensors>=0.4.0
+
+# Development tools (optional)
+wandb>=0.16.0  # For experiment tracking
+tensorboard>=2.15.0  # For training visualisation
