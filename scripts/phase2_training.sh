@@ -23,7 +23,7 @@ OUT_DIR_DEFAULT="${OUT_DIR:-/workspace/models/lora_simple_rocm_out}"
 SEQ_LEN_DEFAULT="${SEQ_LEN:-512}"
 ATTN_IMPL_DEFAULT="${ATTN_IMPL:-eager}"
 GRADIENT_CHECKPOINTING_DEFAULT="${GRADIENT_CHECKPOINTING:-1}"
-PYTORCH_HIP_ALLOC_CONF_DEFAULT="${PYTORCH_HIP_ALLOC_CONF:-expandable_segments:True,max_split_size_mb:128,garbage_collection_threshold:0.8}"
+PYTORCH_ALLOC_CONF_DEFAULT="${PYTORCH_ALLOC_CONF:-${PYTORCH_HIP_ALLOC_CONF:-expandable_segments:True,max_split_size_mb:128,garbage_collection_threshold:0.8}}"
 
 MODE="foreground"
 FULL_RUN="0"
@@ -161,7 +161,8 @@ set -euo pipefail
 # ROCm stability settings
 export GPU_MAX_HW_QUEUES=2
 export HSA_ENABLE_SDMA=0
-export PYTORCH_HIP_ALLOC_CONF='${PYTORCH_HIP_ALLOC_CONF_DEFAULT}'
+unset PYTORCH_HIP_ALLOC_CONF || true
+export PYTORCH_ALLOC_CONF='${PYTORCH_ALLOC_CONF_DEFAULT}'
 export TOKENIZERS_PARALLELISM=false
 
 # Training config
