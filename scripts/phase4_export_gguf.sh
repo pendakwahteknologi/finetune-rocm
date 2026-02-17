@@ -128,6 +128,7 @@ echo ""
 
 out "  ${YELLOW}[1/3] Merging LoRA adapter into base model${RESET}"
 docker run --rm \
+  -i \
   "${TZ_DOCKER_ARGS[@]}" \
   --device=/dev/kfd --device=/dev/dri \
   --group-add video --group-add render \
@@ -175,7 +176,7 @@ merged_dir.mkdir(parents=True, exist_ok=True)
 print(f"Loading base model: {base_model_name}")
 base_model = AutoModelForCausalLM.from_pretrained(
     base_model_name,
-    dtype=dtype,
+    torch_dtype=dtype,
     device_map=device_map,
     token=hf_token,
 )
@@ -217,6 +218,10 @@ out "  ${YELLOW}[2/3] Converting merged model to GGUF${RESET}  $F16_GGUF_HOST"
 if [ ! -f "$MERGED_DIR_HOST/config.json" ]; then
   status_err "Missing merged config: $MERGED_DIR_HOST/config.json"
   out "  Merge step did not produce a valid HF model directory."
+  if [ -d "$MERGED_DIR_HOST" ]; then
+    out "  Current files in merged dir:"
+    ls -1 "$MERGED_DIR_HOST" | sed 's/^/    - /'
+  fi
   exit 1
 fi
 docker run --rm \
