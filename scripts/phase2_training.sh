@@ -219,6 +219,51 @@ os.environ.setdefault("HSA_OVERRIDE_GFX_VERSION", "11.0.1")
 os.environ.setdefault("GPU_MAX_HW_QUEUES", "2")
 os.environ.setdefault("HSA_ENABLE_SDMA", "0")
 
+W = 78
+CYAN = "\033[96m"
+GREEN = "\033[92m"
+YELLOW = "\033[93m"
+DIM = "\033[2m"
+BOLD = "\033[1m"
+RESET = "\033[0m"
+
+
+def draw_line(ch="="):
+    return ch * W
+
+
+def banner(title):
+    print()
+    print(f"{CYAN}{draw_line()}{RESET}")
+    print(f"{BOLD}{title:^{W}}{RESET}")
+    print(f"{CYAN}{draw_line()}{RESET}")
+
+
+def section(title):
+    print()
+    print(f"{BOLD}{title}{RESET}")
+    print(f"{DIM}{draw_line('-')}{RESET}")
+
+
+def kv(key, value):
+    print(f"  {DIM}{key:<24}{RESET}{value}")
+
+
+def fmt_time(seconds):
+    if seconds < 60:
+        return f"{seconds:.0f}s"
+    if seconds < 3600:
+        return f"{seconds / 60:.1f}m"
+    h = int(seconds // 3600)
+    m = int((seconds % 3600) // 60)
+    return f"{h}h {m}m"
+
+
+def progress_bar(current, total, width=24):
+    ratio = (current / total) if total else 0.0
+    filled = int(width * ratio)
+    return f"[{'#' * filled}{'-' * (width - filled)}] {ratio * 100:5.1f}%"
+
 
 def ensure_dirs():
     LOG_DIR.mkdir(parents=True, exist_ok=True)
@@ -244,6 +289,15 @@ def print_gpu_info():
     if hasattr(props, "gcnArchName"):
         print(f"Arch: {props.gcnArchName}")
     print(f"Total VRAM: {fmt_bytes(props.total_memory)}")
+
+
+def gpu_vram_string():
+    if not torch.cuda.is_available():
+        return "n/a"
+    alloc = torch.cuda.memory_allocated(0)
+    total = torch.cuda.get_device_properties(0).total_memory
+    pct = (alloc / total * 100.0) if total else 0.0
+    return f"{fmt_bytes(alloc)} ({pct:.1f}%)"
 
 
 def load_tokenizer():
@@ -299,22 +353,37 @@ def cleanup():
 def main():
     ensure_dirs()
     start = datetime.now()
-    print(f"Start: {start:%Y-%m-%d %H:%M:%S}")
-
     device = get_device()
     dtype = torch.float16 if USE_FP16 else torch.float32
+    banner("ROCm LoRA Fine-Tuning")
+
+    section("Run Information")
+    kv("Start time", start.strftime("%Y-%m-%d %H:%M:%S"))
+    kv("Base model", BASE_MODEL)
+    kv("Data file", str(CHAT_JSONL))
+    kv("Output dir", str(OUT_DIR))
+    kv("Precision", "FP16" if USE_FP16 else "FP32")
+    kv("Batch size", BATCH_SIZE)
+    kv("Grad accumulation", GRAD_ACCUM)
+    kv("Sequence length", SEQ_LEN)
+    kv("Max train rows", MAX_TRAIN_ROWS)
+
+    section("GPU")
     print_gpu_info()
-    print(f"Base model: {BASE_MODEL}")
-    print(f"Data file: {CHAT_JSONL}")
-    print(f"Output dir: {OUT_DIR}")
-    print(f"Seq len: {SEQ_LEN}, batch: {BATCH_SIZE}, grad_accum: {GRAD_ACCUM}")
+    kv("Current VRAM alloc", gpu_vram_string())
 
+    section("Tokenizer")
     tokenizer = load_tokenizer()
+    kv("Vocab size", f"{tokenizer.vocab_size:,}")
+    kv("Pad token", repr(tokenizer.pad_token))
 
+    section("Dataset")
     ds = load_dataset("json", data_files=str(CHAT_JSONL), split="train")
+    source_rows = len(ds)
     if MAX_TRAIN_ROWS > 0 and len(ds) > MAX_TRAIN_ROWS:
         ds = ds.select(range(MAX_TRAIN_ROWS))
-    print(f"Dataset rows selected: {len(ds)}")
+    kv("Source rows", f"{source_rows:,}")
+    kv("Selected rows", f"{len(ds):,}")
 
     texts = []
     for ex in ds:
@@ -333,7 +402,11 @@ def main():
         lengths.append(len(ids))
         tokenized.append({"input_ids": ids, "labels": ids.copy()})
 
-    print(f"Avg tokens: {statistics.mean(lengths):.0f}, max: {max(lengths)}")
+    truncated = sum(1 for n in lengths if n == SEQ_LEN)
+    kv("Avg tokens", f"{statistics.mean(lengths):.0f}")
+    kv("Median tokens", f"{statistics.median(lengths):.0f}")
+    kv("Max tokens", max(lengths))
+    kv("Truncated rows", f"{truncated:,}")
 
     loader = DataLoader(
         tokenized,
@@ -344,10 +417,13 @@ def main():
         drop_last=True,
         collate_fn=lambda b: collate_dynamic_pad(b, tokenizer.pad_token_id),
     )
-    print(f"Batches per epoch: {len(loader)}")
+    kv("Batches/epoch", f"{len(loader):,}")
 
+    section("Model")
     model = load_model(dtype)
     model.to(device)
+    total_params = sum(p.numel() for p in model.parameters())
+    kv("Base parameters", f"{total_params:,}")
 
     lora_targets = ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
     lora_config = LoraConfig(
@@ -360,21 +436,41 @@ def main():
     )
     model = get_peft_model(model, lora_config)
     model.train()
-    print("LoRA adapters applied")
+    trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    kv("LoRA rank", LORA_R)
+    kv("LoRA alpha", LORA_ALPHA)
+    kv("Trainable params", f"{trainable:,} ({(trainable / total_params) * 100:.2f}%)")
+    kv("VRAM after model load", gpu_vram_string())
 
+    section("Optimizer")
     optimizer = torch.optim.Adam(
         model.parameters(),
         lr=LR,
         foreach=False,
     )
+    kv("Algorithm", "Adam")
+    kv("Learning rate", LR)
+    kv("foreach", "False (ROCm stability)")
 
     steps_per_epoch = len(loader)
     total_steps = steps_per_epoch * EPOCHS
-    print(f"Total training steps: {total_steps}")
+    update_steps = total_steps // GRAD_ACCUM
+
+    banner("Training Progress")
+    kv("Total steps", f"{total_steps:,}")
+    kv("Optimizer updates", f"{update_steps:,}")
+    kv("Log every", f"{LOG_EVERY} steps")
+    print()
+    print(
+        f"{DIM}{'Step':>7}  {'Epoch':>7}  {'Loss':>9}  {'Samples/s':>10}  "
+        f"{'VRAM':>16}  {'ETA':>8}  {'Progress':<34}{RESET}"
+    )
+    print(f"{DIM}{draw_line('-')}{RESET}")
 
     start_time = time.time()
     global_step = 0
     loss_window = []
+    best_loss = float("inf")
 
     for epoch in range(1, EPOCHS + 1):
         for batch in loader:
@@ -405,12 +501,15 @@ def main():
             if global_step % LOG_EVERY == 0:
                 elapsed = time.time() - start_time
                 avg_loss = statistics.mean(loss_window)
+                best_loss = min(best_loss, avg_loss)
                 sps = (global_step * BATCH_SIZE) / max(elapsed, 1e-9)
+                step_rate = global_step / max(elapsed, 1e-9)
+                eta_sec = (total_steps - global_step) / max(step_rate, 1e-9)
+                progress = progress_bar(global_step, total_steps)
                 print(
-                    f"step={global_step}/{total_steps} "
-                    f"epoch={epoch}/{EPOCHS} "
-                    f"loss={avg_loss:.4f} "
-                    f"samples_per_sec={sps:.2f}"
+                    f"{global_step:7d}  {epoch:>3}/{EPOCHS:<3}  {avg_loss:9.4f}  "
+                    f"{sps:10.2f}  {gpu_vram_string():>16}  {fmt_time(eta_sec):>8}  "
+                    f"{progress}"
                 )
 
     model_cpu = model.to("cpu")
@@ -421,8 +520,27 @@ def main():
     tokenizer.save_pretrained(str(OUT_DIR))
 
     total_time = time.time() - start_time
-    print(f"Training complete in {total_time:.1f}s")
-    print(f"Saved adapter: {OUT_DIR}")
+    final_avg = statistics.mean(loss_window) if loss_window else 0.0
+    throughput = (global_step * BATCH_SIZE) / max(total_time, 1e-9)
+
+    banner("Training Summary")
+    kv("Duration", fmt_time(total_time))
+    kv("Steps completed", f"{global_step:,}/{total_steps:,}")
+    kv("Final avg loss", f"{final_avg:.4f}")
+    kv("Best avg loss", f"{best_loss:.4f}" if best_loss < float("inf") else "n/a")
+    kv("Throughput", f"{throughput:.2f} samples/s")
+    kv("Saved adapter", str(OUT_DIR))
+
+    section("Saved Files")
+    for p in sorted(OUT_DIR.iterdir()):
+        size = p.stat().st_size
+        if size > 1024 ** 2:
+            size_str = f"{size / 1024 ** 2:.1f} MiB"
+        elif size > 1024:
+            size_str = f"{size / 1024:.0f} KiB"
+        else:
+            size_str = f"{size} B"
+        kv(p.name, size_str)
 
 
 if __name__ == "__main__":
