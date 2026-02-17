@@ -1,4 +1,4 @@
-# finetune-rocm
+# Docker-First LoRA Fine-Tuning Pipeline for ASUS TURBO Radeon™ AI PRO R9700
 
 A Docker-first LoRA fine-tuning workflow for AMD ROCm systems, designed to showcase the ASUS TURBO Radeon AI PRO R9700 from a clean Ubuntu 24.04.4 server.
 
