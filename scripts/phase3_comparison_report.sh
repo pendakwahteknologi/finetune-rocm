@@ -189,22 +189,34 @@ OUT_JSON.write_text(json.dumps(results, indent=2, ensure_ascii=False), encoding=
 # Simple, clean HTML report
 rows = []
 for c in results["comparisons"]:
+    cid = c["id"]
+    prompt = c["prompt"]
+    base_resp = c["base_pass1"]["response"]
+    tuned_resp = c["finetuned_pass1"]["response"]
+    changed = "YES" if c["different"] else "NO"
     rows.append(
         f"<tr>"
-        f"<td>{c['id']}</td>"
-        f"<td>{c['prompt']}</td>"
-        f"<td><pre>{c['base_pass1']['response']}</pre></td>"
-        f"<td><pre>{c['finetuned_pass1']['response']}</pre></td>"
-        f"<td>{'YES' if c['different'] else 'NO'}</td>"
+        f"<td>{cid}</td>"
+        f"<td>{prompt}</td>"
+        f"<td><pre>{base_resp}</pre></td>"
+        f"<td><pre>{tuned_resp}</pre></td>"
+        f"<td>{changed}</td>"
         f"</tr>"
     )
 
 diff_count = sum(1 for c in results["comparisons"] if c["different"])
+meta = results["metadata"]
+base_model_name = meta["base_model"]
+lora_adapter_name = meta["lora_adapter"]
+generated_at = meta["timestamp"]
+total_prompts = len(results["comparisons"])
+rows_html = "".join(rows)
+
 html = f"""<!doctype html>
 <html>
 <head>
-  <meta charset='utf-8'>
-  <meta name='viewport' content='width=device-width, initial-scale=1'>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Fine-Tuning Comparison Report</title>
   <style>
     body {{ font-family: Arial, sans-serif; margin: 24px; }}
@@ -216,10 +228,10 @@ html = f"""<!doctype html>
 </head>
 <body>
   <h1>Fine-Tuning Comparison Report</h1>
-  <p><strong>Base model:</strong> {results['metadata']['base_model']}</p>
-  <p><strong>LoRA adapter:</strong> {results['metadata']['lora_adapter']}</p>
-  <p><strong>Generated:</strong> {results['metadata']['timestamp']}</p>
-  <p><strong>Different responses:</strong> {diff_count}/{len(results['comparisons'])}</p>
+  <p><strong>Base model:</strong> {base_model_name}</p>
+  <p><strong>LoRA adapter:</strong> {lora_adapter_name}</p>
+  <p><strong>Generated:</strong> {generated_at}</p>
+  <p><strong>Different responses:</strong> {diff_count}/{total_prompts}</p>
   <table>
     <thead>
       <tr>
@@ -231,7 +243,7 @@ html = f"""<!doctype html>
       </tr>
     </thead>
     <tbody>
-      {''.join(rows)}
+      {rows_html}
     </tbody>
   </table>
 </body>
