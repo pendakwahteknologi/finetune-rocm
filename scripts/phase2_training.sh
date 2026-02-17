@@ -20,6 +20,10 @@ USE_FP16_DEFAULT="${USE_FP16:-1}"
 USE_BF16_DEFAULT="${USE_BF16:-0}"
 DATALOADER_WORKERS_DEFAULT="${DATALOADER_WORKERS:-0}"
 OUT_DIR_DEFAULT="${OUT_DIR:-/workspace/models/lora_simple_rocm_out}"
+SEQ_LEN_DEFAULT="${SEQ_LEN:-512}"
+ATTN_IMPL_DEFAULT="${ATTN_IMPL:-eager}"
+GRADIENT_CHECKPOINTING_DEFAULT="${GRADIENT_CHECKPOINTING:-1}"
+PYTORCH_HIP_ALLOC_CONF_DEFAULT="${PYTORCH_HIP_ALLOC_CONF:-expandable_segments:True,max_split_size_mb:128,garbage_collection_threshold:0.8}"
 
 MODE="foreground"
 FULL_RUN="0"
@@ -142,9 +146,13 @@ fi
 
 MAX_TRAIN_ROWS_RUN="$MAX_TRAIN_ROWS_DEFAULT"
 OUT_DIR_RUN="$OUT_DIR_DEFAULT"
+SEQ_LEN_RUN="$SEQ_LEN_DEFAULT"
 if [ "$FULL_RUN" = "1" ]; then
   MAX_TRAIN_ROWS_RUN="${MAX_TRAIN_ROWS_FULL:-20011}"
   OUT_DIR_RUN="${OUT_DIR_FULL:-/workspace/models/lora_full_20k_rocm_out}"
+  if [ -z "${SEQ_LEN:-}" ]; then
+    SEQ_LEN_RUN="384"
+  fi
 fi
 
 run_cmd=$(cat <<CMD
@@ -153,6 +161,8 @@ set -euo pipefail
 # ROCm stability settings
 export GPU_MAX_HW_QUEUES=2
 export HSA_ENABLE_SDMA=0
+export PYTORCH_HIP_ALLOC_CONF='${PYTORCH_HIP_ALLOC_CONF_DEFAULT}'
+export TOKENIZERS_PARALLELISM=false
 
 # Training config
 export USE_FP16=${USE_FP16_DEFAULT}
@@ -160,7 +170,10 @@ export USE_BF16=${USE_BF16_DEFAULT}
 export BATCH_SIZE=${BATCH_SIZE_DEFAULT}
 export GRAD_ACCUM=${GRAD_ACCUM_DEFAULT}
 export MAX_TRAIN_ROWS=${MAX_TRAIN_ROWS_RUN}
+export SEQ_LEN=${SEQ_LEN_RUN}
 export DATALOADER_WORKERS=${DATALOADER_WORKERS_DEFAULT}
+export ATTN_IMPL=${ATTN_IMPL_DEFAULT}
+export GRADIENT_CHECKPOINTING=${GRADIENT_CHECKPOINTING_DEFAULT}
 export BASE_DIR=/workspace
 export DATA_DIR=/workspace/data
 export OUT_DIR=${OUT_DIR_RUN}
@@ -201,6 +214,8 @@ LR = float(os.environ.get("LR", "2e-4"))
 SEED = int(os.environ.get("SEED", "42"))
 USE_FP16 = os.environ.get("USE_FP16", "1") == "1"
 USE_BF16 = os.environ.get("USE_BF16", "0") == "1"
+ATTN_IMPL = os.environ.get("ATTN_IMPL", "eager")
+GRADIENT_CHECKPOINTING = os.environ.get("GRADIENT_CHECKPOINTING", "1") == "1"
 
 LORA_R = int(os.environ.get("LORA_R", "8"))
 LORA_ALPHA = int(os.environ.get("LORA_ALPHA", "16"))
@@ -241,9 +256,12 @@ dtype = torch.bfloat16 if USE_BF16 else (torch.float16 if USE_FP16 else torch.fl
 model = AutoModelForCausalLM.from_pretrained(
     BASE_MODEL,
     dtype=dtype,
+    attn_implementation=ATTN_IMPL,
     token=HF_TOKEN,
 )
 model.config.use_cache = False
+if GRADIENT_CHECKPOINTING:
+    model.gradient_checkpointing_enable()
 
 print("Applying LoRA adapters")
 peft_cfg = LoraConfig(
@@ -271,6 +289,7 @@ args = TrainingArguments(
     report_to=[],
     fp16=USE_FP16,
     bf16=USE_BF16,
+    gradient_checkpointing=GRADIENT_CHECKPOINTING,
     remove_unused_columns=False,
     dataloader_num_workers=0,
 )
@@ -303,6 +322,8 @@ if [ "$MODE" = "background" ]; then
   out "  ${WHITE}${BOLD}Container${RESET}  $CONTAINER_NAME"
   out "  ${WHITE}${BOLD}Log File${RESET}   $TRAIN_LOG"
   out "  ${WHITE}${BOLD}Rows${RESET}       $MAX_TRAIN_ROWS_RUN"
+  out "  ${WHITE}${BOLD}Seq Len${RESET}    $SEQ_LEN_RUN"
+  out "  ${WHITE}${BOLD}Attn Impl${RESET}  $ATTN_IMPL_DEFAULT"
   out "  ${WHITE}${BOLD}Output${RESET}     $OUT_DIR_RUN"
   echo ""
 
@@ -312,6 +333,7 @@ if [ "$MODE" = "background" ]; then
     --name "$CONTAINER_NAME" \
     --cap-add=SYS_PTRACE \
     --security-opt seccomp=unconfined \
+    --ulimit memlock=-1 \
     --device=/dev/kfd --device=/dev/dri \
     --group-add video --group-add render \
     --ipc=host \
@@ -331,11 +353,14 @@ fi
 
 banner "Phase 2: Start Training (Interactive)"
 out "  ${WHITE}${BOLD}Rows${RESET}    $MAX_TRAIN_ROWS_RUN"
+out "  ${WHITE}${BOLD}Seq Len${RESET}  $SEQ_LEN_RUN"
+out "  ${WHITE}${BOLD}Attn${RESET}    $ATTN_IMPL_DEFAULT"
 out "  ${WHITE}${BOLD}Output${RESET}  $OUT_DIR_RUN"
 
 docker run -it --rm \
   --cap-add=SYS_PTRACE \
   --security-opt seccomp=unconfined \
+  --ulimit memlock=-1 \
   --device=/dev/kfd --device=/dev/dri \
   --group-add video --group-add render \
   --ipc=host \
